@@ -84,7 +84,11 @@ class OutputConfig:
 class ApplyConfig:
     """Write MAL scores into Plex rating fields for Kometa overlays."""
     enabled: bool = False
-    field: str = "audience"          # audience | user
+    field: str = "audience"          # audience | user — show-level rating field
+    # Season-level field. Kometa can only render <<user_rating>> on season
+    # posters (audience_rating is not a valid season text variable), so
+    # seasons default to the user rating field.
+    season_field: str = "user"       # audience | user
     show_average: str = "mean"       # mean | episode_weighted
     min_confidence: str = "low"      # low | medium | high
     lock_fields: bool = True
@@ -262,6 +266,9 @@ def load_config(path: str | None = None) -> Config:
     apply_field = str(apply_raw.get("field", ApplyConfig.field))
     if apply_field not in ("audience", "user"):
         raise ConfigError("'apply.field' must be 'audience' or 'user'")
+    season_field = str(apply_raw.get("season_field", ApplyConfig.season_field))
+    if season_field not in ("audience", "user"):
+        raise ConfigError("'apply.season_field' must be 'audience' or 'user'")
     show_average = str(apply_raw.get("show_average", ApplyConfig.show_average))
     if show_average not in ("mean", "episode_weighted"):
         raise ConfigError("'apply.show_average' must be 'mean' or 'episode_weighted'")
@@ -271,6 +278,7 @@ def load_config(path: str | None = None) -> Config:
     apply = ApplyConfig(
         enabled=bool(apply_raw.get("enabled", ApplyConfig.enabled)),
         field=apply_field,
+        season_field=season_field,
         show_average=show_average,
         min_confidence=min_confidence,
         lock_fields=bool(apply_raw.get("lock_fields", ApplyConfig.lock_fields)),

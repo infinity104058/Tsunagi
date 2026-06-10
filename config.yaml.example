@@ -40,7 +40,9 @@ output:
 apply:
   enabled: false                 # true = write MAL scores into Plex rating fields
                                  # after each run (for Kometa overlays)
-  field: audience                # audience | user — which Plex rating to write
+  field: audience                # audience | user — show-level rating field
+  season_field: user             # seasons must use 'user': Kometa can only
+                                 # render <<user_rating>> on season posters
   show_average: mean             # mean | episode_weighted — how the show-level
                                  # rating is computed from its seasons; a show
                                  # with one scored season just gets that score

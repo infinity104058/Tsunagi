@@ -106,16 +106,20 @@ def build_plans(
     return plans, skipped
 
 
+def _plex_attr(field: str) -> str:
+    return "userRating" if field == "user" else "audienceRating"
+
+
 def _current_rating(item, plex_field: str) -> float | None:
     value = getattr(item, plex_field, None)
     return round(float(value), 1) if value is not None else None
 
 
-def _write_rating(item, cfg: ApplyConfig, rating: float) -> None:
-    if cfg.field == "user":
-        item.editUserRating(rating, locked=cfg.lock_fields)
+def _write_rating(item, field: str, rating: float, locked: bool) -> None:
+    if field == "user":
+        item.editUserRating(rating, locked=locked)
     else:
-        item.editAudienceRating(rating, locked=cfg.lock_fields)
+        item.editAudienceRating(rating, locked=locked)
 
 
 def apply_to_plex(
@@ -125,7 +129,8 @@ def apply_to_plex(
 ) -> tuple[ApplyStats, list[tuple[int, str, int, float]]]:
     """Synchronous Plex I/O (run via asyncio.to_thread). Returns stats and
     the list of writes performed, for the caller to record in the DB."""
-    plex_field = "userRating" if cfg.field == "user" else "audienceRating"
+    show_attr = _plex_attr(cfg.field)
+    season_attr = _plex_attr(cfg.season_field)
     stats = ApplyStats()
     written: list[tuple[int, str, int, float]] = []
 
@@ -143,7 +148,7 @@ def apply_to_plex(
 
         # ---- show level ------------------------------------------------
         if plan.show_rating is not None:
-            current = _current_rating(show, plex_field)
+            current = _current_rating(show, show_attr)
             if current == plan.show_rating:
                 stats.skipped_unchanged += 1
             else:
@@ -152,7 +157,7 @@ def apply_to_plex(
                          f"{current:.1f}" if current is not None else "unset")
                 if not cfg.dry_run:
                     try:
-                        _write_rating(show, cfg, plan.show_rating)
+                        _write_rating(show, cfg.field, plan.show_rating, cfg.lock_fields)
                         written.append((plan.plex_id, "show", -1, plan.show_rating))
                         stats.shows_updated += 1
                     except Exception:
@@ -175,7 +180,7 @@ def apply_to_plex(
                 log.warning("'%s' S%d not found in Plex — skipping", plan.title, num)
                 stats.errors += 1
                 continue
-            current = _current_rating(season, plex_field)
+            current = _current_rating(season, season_attr)
             if current == rating:
                 stats.skipped_unchanged += 1
                 continue
@@ -186,7 +191,7 @@ def apply_to_plex(
                 stats.seasons_updated += 1
                 continue
             try:
-                _write_rating(season, cfg, rating)
+                _write_rating(season, cfg.season_field, rating, cfg.lock_fields)
                 written.append((plan.plex_id, "season", num, rating))
                 stats.seasons_updated += 1
             except Exception:

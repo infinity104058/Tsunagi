@@ -24,16 +24,13 @@
 # IMPORTANT: do NOT enable mass_audience_rating_update /
 # mass_season_rating_update operations on this library — they would
 # overwrite the per-season values plex-mal-matcher wrote, every Kometa run.
-# (If you switch plex-mal-matcher's apply.field to "user", change
-# <<audience_rating>> / audience_rating.gte below to <<user_rating>> /
-# user_rating.gte, and avoid mass_user_rating_update instead.)
+# Keep mass_user_rating_update OFF as well — season scores live in the
+# user rating field.
 
 overlays:
   # ---- Show posters: average MAL score -------------------------------------
   MAL Rating Show:
     plex_all: true
-    filters:
-      audience_rating.gte: 0.1        # suppress badge when no rating present
     overlay:
       name: text(MAL <<audience_rating>>)
       horizontal_align: left
@@ -49,13 +46,15 @@ overlays:
       back_padding: 15
 
   # ---- Season posters: that season's own MAL score --------------------------
+  # NOTE: Kometa only supports <<user_rating>> as a season-level text
+  # variable (audience_rating is movie/show/episode only), which is why
+  # plex-mal-matcher writes season scores to the user rating field
+  # (apply.season_field: user) while shows use audience.
   MAL Rating Season:
     builder_level: season
     plex_all: true
-    filters:
-      audience_rating.gte: 0.1
     overlay:
-      name: text(MAL <<audience_rating>>)
+      name: text(MAL <<user_rating>>)
       horizontal_align: left
       horizontal_offset: 30
       vertical_align: top
