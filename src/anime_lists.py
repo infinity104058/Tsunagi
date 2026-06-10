@@ -6,6 +6,7 @@ for O(1) lookups.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
@@ -73,34 +74,68 @@ class AnimeLists:
 
     # ------------------------------------------------------------------ #
 
-    def _is_stale(self) -> bool:
-        path = Path(self._cfg.local_path)
+    async def _refresh_if_stale(self) -> None:
+        await self._download_if_stale(self._cfg.local_path, self._cfg.url, "anime-lists XML")
+        if self._cfg.mal_map_url:
+            await self._download_if_stale(
+                self._mal_map_path(), self._cfg.mal_map_url, "MAL-map JSON"
+            )
+
+    def _mal_map_path(self) -> str:
+        return self._cfg.mal_map_path or self._cfg.local_path + ".mal-map.json"
+
+    def _path_is_stale(self, path_str: str) -> bool:
+        path = Path(path_str)
         if not path.exists():
             return True
         age_days = (time.time() - path.stat().st_mtime) / 86400.0
         return age_days > self._cfg.refresh_days
 
-    async def _refresh_if_stale(self) -> None:
-        if not self._is_stale():
-            log.info("anime-lists XML at %s is fresh — skipping download", self._cfg.local_path)
+    async def _download_if_stale(self, local_path: str, url: str, label: str) -> None:
+        if not self._path_is_stale(local_path):
+            log.info("%s at %s is fresh — skipping download", label, local_path)
             return
 
-        log.info("Downloading anime-lists XML from %s", self._cfg.url)
+        log.info("Downloading %s from %s", label, url)
         async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-            resp = await client.get(self._cfg.url)
+            resp = await client.get(url)
             resp.raise_for_status()
 
         # Write atomically so a failed download never clobbers a good copy.
-        tmp_path = self._cfg.local_path + ".tmp"
+        tmp_path = local_path + ".tmp"
         Path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
         with open(tmp_path, "wb") as fh:
             fh.write(resp.content)
-        os.replace(tmp_path, self._cfg.local_path)
-        log.info("anime-lists XML saved to %s (%d bytes)", self._cfg.local_path, len(resp.content))
+        os.replace(tmp_path, local_path)
+        log.info("%s saved to %s (%d bytes)", label, local_path, len(resp.content))
+
+    def _load_mal_map(self) -> dict[int, int]:
+        """anidb_id → mal_id from Fribb's anime-lists JSON. The ScudLee XML
+        carries no MAL IDs of its own, so this join is what makes the
+        anime-lists resolution step work at all."""
+        path = Path(self._mal_map_path())
+        if not path.exists():
+            log.warning("No MAL-map JSON at %s — anime-lists entries will rely "
+                        "on <mal-id> elements only (rare)", path)
+            return {}
+        try:
+            records = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            log.warning("Failed to read MAL-map JSON %s: %s", path, exc)
+            return {}
+        mapping: dict[int, int] = {}
+        for rec in records:
+            anidb = rec.get("anidb_id")
+            mal = rec.get("mal_id")
+            if isinstance(anidb, int) and isinstance(mal, int):
+                mapping[anidb] = mal
+        log.info("Loaded MAL map: %d AniDB→MAL pairs", len(mapping))
+        return mapping
 
     def _parse(self) -> None:
         tree = etree.parse(self._cfg.local_path)
         root = tree.getroot()
+        mal_map = self._load_mal_map()
 
         index: dict[int, list[AnimeListEntry]] = {}
         total = 0
@@ -116,23 +151,28 @@ class AnimeLists:
                 continue
             tvdb_id = int(tvdb_raw)
 
-            mal_el = anime.find("mal-id")
-            if mal_el is None or mal_el.text is None:
-                # Not every <anime> element has a <mal-id> child.
-                skipped += 1
-                continue
-            try:
-                # Some entries list multiple IDs; take the first.
-                mal_id = int(mal_el.text.strip().split(",")[0].strip())
-            except ValueError:
-                skipped += 1
-                continue
-
             anidb_raw = anime.get("anidbid") or "0"
             try:
                 anidb_id = int(anidb_raw)
             except ValueError:
                 anidb_id = 0
+
+            # MAL ID: the ScudLee XML itself has no <mal-id> elements, so the
+            # primary source is the Fribb JSON joined on the AniDB ID. A
+            # <mal-id> element wins if one ever appears (custom files).
+            mal_id: int | None = None
+            mal_el = anime.find("mal-id")
+            if mal_el is not None and mal_el.text:
+                try:
+                    mal_id = int(mal_el.text.strip().split(",")[0].strip())
+                except ValueError:
+                    mal_id = None
+            if mal_id is None:
+                mal_id = mal_map.get(anidb_id)
+            if mal_id is None:
+                # No MAL identity for this AniDB entry — unusable for us.
+                skipped += 1
+                continue
 
             # defaulttvdbseason can be "a" (absolute ordering). Map that to -1
             # so it never matches a real season number in step 2; date overlap

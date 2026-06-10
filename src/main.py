@@ -128,6 +128,17 @@ async def run_once(config: Config) -> None:
         # plexapi is sync — keep it off the event loop. The Plex token is
         # never logged.
         shows = await asyncio.to_thread(get_anime_shows, config.plex)
+        if config.plex.exclude:
+            excluded_titles = {str(x).lower() for x in config.plex.exclude}
+            excluded_ids = {x for x in config.plex.exclude if isinstance(x, int)}
+            before = len(shows)
+            shows = [
+                s for s in shows
+                if s.title.lower() not in excluded_titles
+                and s.tvdb_id not in excluded_ids
+            ]
+            if before != len(shows):
+                log.info("Excluded %d show(s) via plex.exclude", before - len(shows))
 
         resolver = Resolver(config, db, jikan, anime_lists)
         aggregator = ScoreAggregator(jikan)

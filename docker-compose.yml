@@ -7,4 +7,10 @@ services:
     environment:
       - CONFIG_PATH=/data/config.yaml
     volumes:
-      - ./data:/data
+      - /mnt/tank/appdata/plex-mal-matcher:/data
+    networks:
+      - proxy          # Must be on the same network as your Plex container
+
+networks:
+  proxy:
+    external: true

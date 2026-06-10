@@ -2,11 +2,23 @@ plex:
   url: "http://plex:32400"       # Container name or LAN IP — never localhost
   token: "YOUR_PLEX_TOKEN"
   library_name: "Anime Shows"    # Exact name of the Plex library section
+  exclude: []                    # Shows to skip entirely — titles (case-insensitive)
+                                 # or TVDB IDs, e.g. ["One Piece", 81797]
 
 anime_lists:
   url: "https://raw.githubusercontent.com/Anime-Lists/anime-lists/master/anime-list-full.xml"
   local_path: "/data/anime-lists.xml"
   refresh_days: 7                # Re-download if older than this
+  # The XML has no MAL IDs; they are joined in from Fribb's list by AniDB ID.
+  mal_map_url: "https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-full.json"
+  # mal_map_path: "/data/anime-lists.xml.mal-map.json"   # default: alongside the XML
+
+match:
+  season_zero: "bundle"          # bundle (default: S0 is always a specials bundle,
+                                 # never scored) | match (legacy: try to chain-match
+                                 # S0 with 7+ episodes) | skip (omit S0 from output)
+  include_movie_entries: false   # true only if movies live inside your show seasons;
+                                 # false keeps Movie-type MAL entries out of matching
 
 jikan:
   base_url: "https://api.jikan.moe/v4"

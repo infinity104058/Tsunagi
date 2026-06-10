@@ -25,7 +25,7 @@ from src.config import Config, Override
 from src.database import Database
 from src.jikan_client import JikanClient
 from src.plex_client import PlexSeason, PlexShow
-from src.season_matcher import SeasonMatch, match_seasons, reduce_confidence
+from src.season_matcher import MatchOptions, SeasonMatch, match_seasons, reduce_confidence
 
 log = logging.getLogger(__name__)
 
@@ -148,7 +148,11 @@ class Resolver:
             return ShowResolution(resolutions=resolutions, chain=[], source=source)
 
         matches = match_seasons(
-            show, chain, entries, seasons=pending, already_assigned=pre_assigned
+            show, chain, entries, seasons=pending, already_assigned=pre_assigned,
+            options=MatchOptions(
+                season_zero=self._config.match.season_zero,
+                include_movie_entries=self._config.match.include_movie_entries,
+            ),
         )
 
         for match in matches:

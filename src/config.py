@@ -31,6 +31,7 @@ class PlexConfig:
     url: str
     token: str
     library_name: str
+    exclude: tuple = ()  # show titles (case-insensitive) or TVDB IDs to skip
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,24 @@ class AnimeListsConfig:
     url: str
     local_path: str
     refresh_days: int
+    # The ScudLee XML has no MAL IDs; they are joined in from Fribb's
+    # anime-lists JSON via the shared AniDB ID.
+    mal_map_url: str = (
+        "https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-full.json"
+    )
+    mal_map_path: str = ""  # default: local_path with .mal-map.json suffix
+
+
+@dataclass(frozen=True)
+class MatchConfig:
+    # Season 0 policy: "bundle" (always ova_bundle, never chain-matched),
+    # "match" (legacy behavior: full matching for S0 with >6 episodes),
+    # "skip" (exclude S0 entirely from output).
+    season_zero: str = "bundle"
+    # Movie-type MAL entries stay in the chain (they link prequel/sequel
+    # hops) but are not match candidates unless this is true. Keep false
+    # when movies live in a separate Plex library.
+    include_movie_entries: bool = False
 
 
 @dataclass(frozen=True)
@@ -83,6 +102,7 @@ class Config:
     jikan: JikanConfig
     database: DatabaseConfig
     output: OutputConfig
+    match: MatchConfig
     schedule_interval_hours: int
     overrides_path: str
     overrides: list[Override] = field(default_factory=list)
@@ -172,15 +192,27 @@ def load_config(path: str | None = None) -> Config:
     output_raw = _require(raw, "output", "root")
     overrides_raw = _require(raw, "overrides", "root")
 
+    exclude_raw = plex_raw.get("exclude") or []
+    if not isinstance(exclude_raw, list):
+        raise ConfigError("'plex.exclude' must be a list of titles or TVDB IDs")
     plex = PlexConfig(
         url=str(_require(plex_raw, "url", "plex")),
         token=str(_require(plex_raw, "token", "plex")),
         library_name=str(_require(plex_raw, "library_name", "plex")),
+        exclude=tuple(exclude_raw),
     )
+    local_path = str(_require(anime_lists_raw, "local_path", "anime_lists"))
     anime_lists = AnimeListsConfig(
         url=str(_require(anime_lists_raw, "url", "anime_lists")),
-        local_path=str(_require(anime_lists_raw, "local_path", "anime_lists")),
+        local_path=local_path,
         refresh_days=int(_require(anime_lists_raw, "refresh_days", "anime_lists")),
+        mal_map_url=str(
+            anime_lists_raw.get("mal_map_url")
+            or AnimeListsConfig.mal_map_url
+        ),
+        mal_map_path=str(
+            anime_lists_raw.get("mal_map_path") or local_path + ".mal-map.json"
+        ),
     )
     jikan = JikanConfig(
         base_url=str(_require(jikan_raw, "base_url", "jikan")).rstrip("/"),
@@ -203,12 +235,24 @@ def load_config(path: str | None = None) -> Config:
     overrides_path = str(_require(overrides_raw, "path", "overrides"))
     overrides = _load_overrides(overrides_path)
 
+    match_raw = raw.get("match") or {}
+    season_zero = str(match_raw.get("season_zero", MatchConfig.season_zero))
+    if season_zero not in ("bundle", "match", "skip"):
+        raise ConfigError("'match.season_zero' must be one of: bundle, match, skip")
+    match = MatchConfig(
+        season_zero=season_zero,
+        include_movie_entries=bool(
+            match_raw.get("include_movie_entries", MatchConfig.include_movie_entries)
+        ),
+    )
+
     return Config(
         plex=plex,
         anime_lists=anime_lists,
         jikan=jikan,
         database=database,
         output=output,
+        match=match,
         schedule_interval_hours=schedule_interval_hours,
         overrides_path=overrides_path,
         overrides=overrides,

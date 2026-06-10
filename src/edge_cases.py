@@ -31,6 +31,20 @@ def parse_date(value: str | None) -> date | None:
         return None
 
 
+def entry_window(entry: dict) -> tuple[date | None, date | None]:
+    """Air window of a chain entry, with the crucial nuance that a missing
+    aired_to means *currently airing* only for multi-episode TV — for a
+    Movie (or any single-episode entry) MAL routinely leaves aired_to null,
+    and treating that as open-ended makes a 2001 movie "overlap" every
+    season aired since. Those get a closed single-day window instead."""
+    start = parse_date(entry.get("aired_from"))
+    end = parse_date(entry.get("aired_to"))
+    if end is None and start is not None:
+        if entry.get("type") == "Movie" or entry.get("episodes") == 1:
+            end = start
+    return start, end
+
+
 def date_ranges_overlap(
     a_start: date | None,
     a_end: date | None,
@@ -67,6 +81,7 @@ def handle(
     base_confidence: str = "medium",
     base_notes: str = "",
     overlap_ratio: float | None = None,
+    include_movies: bool = False,
 ) -> EdgeCaseResult:
     """Apply rules A–D in order; return on the first match.
 
@@ -87,12 +102,8 @@ def handle(
         overlapping = [
             e
             for e in chain
-            if date_ranges_overlap(
-                plex_start,
-                plex_end,
-                parse_date(e.get("aired_from")),
-                parse_date(e.get("aired_to")),
-            )
+            if (include_movies or e.get("type") != "Movie")
+            and date_ranges_overlap(plex_start, plex_end, *entry_window(e))
         ]
         # The split is only real if more than one chain entry spans the season.
         if len(overlapping) > 1:

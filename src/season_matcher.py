@@ -19,7 +19,7 @@ from datetime import date
 
 from src import edge_cases
 from src.anime_lists import AnimeListEntry
-from src.edge_cases import parse_date
+from src.edge_cases import entry_window, parse_date
 from src.plex_client import PlexSeason, PlexShow
 
 log = logging.getLogger(__name__)
@@ -28,6 +28,13 @@ OVA_SEASON_ZERO_MAX_EPISODES = 6
 OVA_CLUSTER_DISTANCE_DAYS = 183  # ~6 months
 
 CONFIDENCE_LEVELS = ["low", "medium", "high"]
+
+
+@dataclass(frozen=True)
+class MatchOptions:
+    """Behavior switches sourced from config.match."""
+    season_zero: str = "bundle"  # bundle | match | skip
+    include_movie_entries: bool = False
 
 
 def reduce_confidence(confidence: str) -> str:
@@ -90,11 +97,10 @@ def _is_ova_bundle(season: PlexSeason, chain: list[dict]) -> bool:
 
     windows: list[tuple[date, date]] = []
     for entry in chain:
-        start = parse_date(entry.get("aired_from"))
+        start, end = entry_window(entry)
         if start is None:
             continue
-        end = parse_date(entry.get("aired_to")) or date.today()
-        windows.append((start, end))
+        windows.append((start, end or date.today()))
     if not windows:
         return False
 
@@ -139,7 +145,7 @@ def _direct_map(
 
 
 def _date_overlap_match(
-    season: PlexSeason, chain: list[dict]
+    season: PlexSeason, chain: list[dict], include_movies: bool = False
 ) -> tuple[dict | None, float, str, str]:
     """Step 3 — air date overlap matching.
 
@@ -151,7 +157,7 @@ def _date_overlap_match(
 
     if plex_start is None or plex_end is None:
         # Zero dated episodes — cannot match by date.
-        candidate = _closest_by_episode_count(season, chain)
+        candidate = _closest_by_episode_count(season, chain, include_movies)
         return (
             candidate,
             0.0,
@@ -164,10 +170,12 @@ def _date_overlap_match(
     plex_span = (plex_end - plex_start).days or 1
 
     for entry in chain:
-        mal_start = parse_date(entry.get("aired_from"))
+        if not include_movies and entry.get("type") == "Movie":
+            continue
+        mal_start, mal_end = entry_window(entry)
         if mal_start is None:
             continue
-        mal_end = parse_date(entry.get("aired_to")) or date.today()
+        mal_end = mal_end or date.today()
 
         overlap_start = max(plex_start, mal_start)
         overlap_end = min(plex_end, mal_end)
@@ -181,7 +189,7 @@ def _date_overlap_match(
     if best is None or best_ratio <= 0:
         # Nothing in the chain overlaps the season at all — date matching is
         # impossible. Fall back to episode count.
-        candidate = _closest_by_episode_count(season, chain)
+        candidate = _closest_by_episode_count(season, chain, include_movies)
         return (
             candidate,
             0.0,
@@ -211,8 +219,13 @@ def _date_overlap_match(
     return best, best_ratio, confidence, ""
 
 
-def _closest_by_episode_count(season: PlexSeason, chain: list[dict]) -> dict | None:
-    candidates = [e for e in chain if e.get("episodes")]
+def _closest_by_episode_count(
+    season: PlexSeason, chain: list[dict], include_movies: bool = False
+) -> dict | None:
+    candidates = [
+        e for e in chain
+        if e.get("episodes") and (include_movies or e.get("type") != "Movie")
+    ]
     if not candidates:
         return None
     return min(candidates, key=lambda e: abs(e["episodes"] - season.episode_count))
@@ -224,6 +237,7 @@ def match_seasons(
     anime_list_entries: list[AnimeListEntry],
     seasons: list[PlexSeason] | None = None,
     already_assigned: set[int] | None = None,
+    options: MatchOptions = MatchOptions(),
 ) -> list[SeasonMatch]:
     """Match each Plex season to one or more MAL entries.
 
@@ -239,7 +253,18 @@ def match_seasons(
 
     results: list[SeasonMatch] = []
     for season in to_match:
-        match = _match_one(season, chain, chain_by_id, anime_list_entries, assigned)
+        if season.season_num == 0 and options.season_zero != "match":
+            if options.season_zero == "skip":
+                log.info("'%s' S0 skipped (match.season_zero=skip)", show.title)
+                continue
+            # "bundle": S0 is specials/extras in practice — never chain-match.
+            results.append(SeasonMatch(
+                season_num=0, mal_ids=[], method="ova_bundle", confidence="high",
+                notes="Season 0 treated as specials bundle (match.season_zero=bundle).",
+            ))
+            continue
+        match = _match_one(season, chain, chain_by_id, anime_list_entries, assigned,
+                           options)
         results.append(match)
         assigned.update(match.mal_ids)
         log.log(
@@ -257,6 +282,7 @@ def _match_one(
     chain_by_id: dict[int, dict],
     anime_list_entries: list[AnimeListEntry],
     assigned: set[int],
+    options: MatchOptions = MatchOptions(),
 ) -> SeasonMatch:
     # ---- Step 1 — OVA season detection ------------------------------------
     if _is_ova_bundle(season, chain):
@@ -283,7 +309,7 @@ def _match_one(
     # ---- Step 3 — air date overlap (step 2 unavailable or low-confidence) --
     if direct is None or confidence == "low":
         date_candidate, ratio, date_confidence, date_notes = _date_overlap_match(
-            season, chain
+            season, chain, include_movies=options.include_movie_entries
         )
         better_than_direct = direct is None or _conf_rank(date_confidence) > _conf_rank(
             confidence
@@ -306,6 +332,7 @@ def _match_one(
         base_confidence=confidence,
         base_notes=notes,
         overlap_ratio=overlap_ratio,
+        include_movies=options.include_movie_entries,
     )
 
     final_confidence = result.confidence
