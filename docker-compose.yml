@@ -1,0 +1,16 @@
+services:
+  plex-mal-matcher:
+    build: .
+    container_name: plex-mal-matcher
+    restart: unless-stopped
+    user: "568:568"    # apps:apps — matches host appdata ownership
+    environment:
+      - CONFIG_PATH=/data/config.yaml
+    volumes:
+      - /mnt/Apps/mainApps/Dockge/Dockge/plex-mal-matcher:/data
+    networks:
+      - proxy          # Must be on the same network as your Plex container
+
+networks:
+  proxy:
+    external: true

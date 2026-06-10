@@ -1,0 +1,19 @@
+overrides:
+  # Force a specific TVDB season to a specific MAL ID
+  - tvdb_id: 73255
+    season: 1
+    mal_id: 5114
+    note: "FMA Brotherhood — TVDB season 1 maps to MAL 5114"
+
+  # Mark a season as an OVA bundle (skip scoring)
+  - tvdb_id: 83462
+    season: 0
+    type: ova_bundle
+    note: "Season 0 is a loose OVA collection, not rateable as a season"
+
+  # Correct a weighted average that the algorithm got wrong
+  - tvdb_id: 400455
+    season: 4
+    mal_ids: [40028, 51535]
+    method: weighted_avg
+    note: "TVDB S4 only covers the first two Final Season entries"

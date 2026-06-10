@@ -1,0 +1,293 @@
+"""Async SQLite layer: schema, queries and TTL logic.
+
+Raw SQL only — no ORM. All timestamps are timezone-aware UTC, serialised as
+ISO 8601 with a ``Z`` suffix.
+
+``mal_entries`` caches series metadata only. Relations and search responses do
+not fit that schema — they are cached in ``jikan_cache`` instead, using the
+same ``score_ttl_days`` TTL. Without this, every run would re-fetch all
+relations during chain building, which is the most Jikan-intensive step.
+"""
+from __future__ import annotations
+
+import json
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Any
+
+import aiosqlite
+
+log = logging.getLogger(__name__)
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS mappings (
+    tvdb_id       INTEGER NOT NULL,
+    season_num    INTEGER NOT NULL,
+    mal_ids       TEXT NOT NULL,      -- JSON array of ints
+    method        TEXT NOT NULL,      -- direct | weighted_avg | shared_entry | ova_bundle
+    confidence    TEXT NOT NULL,      -- high | medium | low
+    episode_offset INTEGER DEFAULT 0,
+    source        TEXT NOT NULL,      -- anime-lists | jikan-search | override
+    notes         TEXT DEFAULT '',
+    resolved_at   TEXT NOT NULL,      -- ISO 8601
+    PRIMARY KEY (tvdb_id, season_num)
+);
+
+CREATE TABLE IF NOT EXISTS mal_entries (
+    mal_id        INTEGER PRIMARY KEY,
+    title         TEXT,
+    title_english TEXT,
+    type          TEXT,
+    episodes      INTEGER,
+    score         REAL,
+    members       INTEGER,
+    aired_from    TEXT,
+    aired_to      TEXT,
+    fetched_at    TEXT NOT NULL       -- ISO 8601
+);
+
+CREATE TABLE IF NOT EXISTS unresolved (
+    tvdb_id       INTEGER NOT NULL,
+    title         TEXT,
+    season_num    INTEGER,
+    reason        TEXT,
+    attempted_at  TEXT NOT NULL,
+    PRIMARY KEY (tvdb_id, season_num)
+);
+
+CREATE TABLE IF NOT EXISTS jikan_cache (
+    cache_key     TEXT PRIMARY KEY,   -- e.g. "relations:5114" or "search:tv:attack on titan"
+    payload       TEXT NOT NULL,      -- raw JSON of the 'data' key
+    fetched_at    TEXT NOT NULL       -- ISO 8601
+);
+"""
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def utc_now_iso() -> str:
+    """Current UTC time as ISO 8601 with Z suffix."""
+    return utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _parse_iso(ts: str) -> datetime:
+    # Accept both '...Z' and '+00:00' offsets.
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def _is_fresh(ts: str, ttl_days: int) -> bool:
+    try:
+        fetched = _parse_iso(ts)
+    except (ValueError, AttributeError):
+        return False
+    return utc_now() - fetched <= timedelta(days=ttl_days)
+
+
+class Database:
+    """Owns the aiosqlite connection and all queries."""
+
+    def __init__(self, path: str, score_ttl_days: int, mapping_ttl_days: int) -> None:
+        self._path = path
+        self._score_ttl_days = score_ttl_days
+        self._mapping_ttl_days = mapping_ttl_days
+        self._db: aiosqlite.Connection | None = None
+
+    async def connect(self) -> None:
+        self._db = await aiosqlite.connect(self._path)
+        self._db.row_factory = aiosqlite.Row
+        await self._db.executescript(SCHEMA)
+        await self._db.commit()
+        log.info("Database ready at %s", self._path)
+
+    async def close(self) -> None:
+        if self._db is not None:
+            await self._db.close()
+            self._db = None
+
+    @property
+    def conn(self) -> aiosqlite.Connection:
+        if self._db is None:
+            raise RuntimeError("Database.connect() was never called")
+        return self._db
+
+    # ------------------------------------------------------------------ #
+    # mappings
+    # ------------------------------------------------------------------ #
+
+    async def get_mapping(self, tvdb_id: int, season_num: int) -> dict[str, Any] | None:
+        """Return the cached mapping if present and within mapping_ttl_days."""
+        async with self.conn.execute(
+            "SELECT * FROM mappings WHERE tvdb_id = ? AND season_num = ?",
+            (tvdb_id, season_num),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None:
+            return None
+        if not _is_fresh(row["resolved_at"], self._mapping_ttl_days):
+            return None
+        return {
+            "tvdb_id": row["tvdb_id"],
+            "season_num": row["season_num"],
+            "mal_ids": json.loads(row["mal_ids"]),
+            "method": row["method"],
+            "confidence": row["confidence"],
+            "episode_offset": row["episode_offset"],
+            "source": row["source"],
+            "notes": row["notes"],
+            "resolved_at": row["resolved_at"],
+        }
+
+    async def upsert_mapping(
+        self,
+        tvdb_id: int,
+        season_num: int,
+        mal_ids: list[int],
+        method: str,
+        confidence: str,
+        episode_offset: int,
+        source: str,
+        notes: str = "",
+    ) -> None:
+        await self.conn.execute(
+            """
+            INSERT OR REPLACE INTO mappings
+                (tvdb_id, season_num, mal_ids, method, confidence,
+                 episode_offset, source, notes, resolved_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                tvdb_id,
+                season_num,
+                json.dumps(mal_ids),
+                method,
+                confidence,
+                episode_offset,
+                source,
+                notes,
+                utc_now_iso(),
+            ),
+        )
+        await self.conn.commit()
+
+    # ------------------------------------------------------------------ #
+    # mal_entries
+    # ------------------------------------------------------------------ #
+
+    async def get_mal_entry(self, mal_id: int) -> dict[str, Any] | None:
+        """Return the cached MAL entry if present and within score_ttl_days."""
+        async with self.conn.execute(
+            "SELECT * FROM mal_entries WHERE mal_id = ?", (mal_id,)
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None:
+            return None
+        if not _is_fresh(row["fetched_at"], self._score_ttl_days):
+            return None
+        return {
+            "mal_id": row["mal_id"],
+            "title": row["title"],
+            "title_english": row["title_english"],
+            "type": row["type"],
+            "episodes": row["episodes"],
+            "score": row["score"],
+            "members": row["members"],
+            "aired_from": row["aired_from"],
+            "aired_to": row["aired_to"],
+        }
+
+    async def upsert_mal_entry(self, entry: dict[str, Any]) -> None:
+        await self.conn.execute(
+            """
+            INSERT OR REPLACE INTO mal_entries
+                (mal_id, title, title_english, type, episodes, score,
+                 members, aired_from, aired_to, fetched_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                entry["mal_id"],
+                entry.get("title"),
+                entry.get("title_english"),
+                entry.get("type"),
+                entry.get("episodes"),
+                entry.get("score"),
+                entry.get("members"),
+                entry.get("aired_from"),
+                entry.get("aired_to"),
+                utc_now_iso(),
+            ),
+        )
+        await self.conn.commit()
+
+    # ------------------------------------------------------------------ #
+    # unresolved
+    # ------------------------------------------------------------------ #
+
+    async def get_unresolved(self) -> list[dict[str, Any]]:
+        async with self.conn.execute(
+            "SELECT * FROM unresolved ORDER BY attempted_at DESC"
+        ) as cur:
+            rows = await cur.fetchall()
+        return [
+            {
+                "tvdb_id": r["tvdb_id"],
+                "title": r["title"],
+                "season_num": r["season_num"],
+                "reason": r["reason"],
+                "attempted_at": r["attempted_at"],
+            }
+            for r in rows
+        ]
+
+    async def upsert_unresolved(
+        self, tvdb_id: int, title: str, season_num: int, reason: str
+    ) -> None:
+        await self.conn.execute(
+            """
+            INSERT OR REPLACE INTO unresolved
+                (tvdb_id, title, season_num, reason, attempted_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (tvdb_id, title, season_num, reason, utc_now_iso()),
+        )
+        await self.conn.commit()
+
+    async def delete_unresolved(self, tvdb_id: int, season_num: int) -> None:
+        """Remove a stale unresolved row once the season resolves successfully."""
+        await self.conn.execute(
+            "DELETE FROM unresolved WHERE tvdb_id = ? AND season_num = ?",
+            (tvdb_id, season_num),
+        )
+        await self.conn.commit()
+
+    # ------------------------------------------------------------------ #
+    # jikan_cache
+    # ------------------------------------------------------------------ #
+
+    async def get_cached_json(self, cache_key: str) -> dict | list | None:
+        """Return the parsed jikan_cache payload if within score_ttl_days."""
+        async with self.conn.execute(
+            "SELECT payload, fetched_at FROM jikan_cache WHERE cache_key = ?",
+            (cache_key,),
+        ) as cur:
+            row = await cur.fetchone()
+        if row is None:
+            return None
+        if not _is_fresh(row["fetched_at"], self._score_ttl_days):
+            return None
+        try:
+            return json.loads(row["payload"])
+        except json.JSONDecodeError:
+            log.warning("Corrupt jikan_cache payload for key %s — ignoring", cache_key)
+            return None
+
+    async def upsert_cached_json(self, cache_key: str, payload: dict | list) -> None:
+        await self.conn.execute(
+            """
+            INSERT OR REPLACE INTO jikan_cache (cache_key, payload, fetched_at)
+            VALUES (?, ?, ?)
+            """,
+            (cache_key, json.dumps(payload), utc_now_iso()),
+        )
+        await self.conn.commit()
