@@ -117,7 +117,11 @@ def _current_rating(item, plex_field: str) -> float | None:
 
 def _write_rating(item, field: str, rating: float, locked: bool) -> None:
     if field == "user":
-        item.editUserRating(rating, locked=locked)
+        # User ratings must go through Plex's /:/rate endpoint (what the star
+        # widget uses) — the section-edit endpoint that editUserRating wraps
+        # silently ignores userRating on seasons. rate() works at all levels
+        # and needs no field locking (agents never touch user ratings).
+        item.rate(rating)
     else:
         item.editAudienceRating(rating, locked=locked)
 
