@@ -55,6 +55,15 @@ CREATE TABLE IF NOT EXISTS unresolved (
     PRIMARY KEY (tvdb_id, season_num)
 );
 
+CREATE TABLE IF NOT EXISTS applied_ratings (
+    plex_id     INTEGER NOT NULL,
+    level       TEXT NOT NULL,        -- show | season
+    season_num  INTEGER NOT NULL,     -- -1 for show-level
+    rating      REAL NOT NULL,
+    applied_at  TEXT NOT NULL,        -- UTC ISO 8601 Z
+    PRIMARY KEY (plex_id, level, season_num)
+);
+
 CREATE TABLE IF NOT EXISTS jikan_cache (
     cache_key     TEXT PRIMARY KEY,   -- e.g. "relations:5114" or "search:tv:attack on titan"
     payload       TEXT NOT NULL,      -- raw JSON of the 'data' key
@@ -281,6 +290,21 @@ class Database:
         except json.JSONDecodeError:
             log.warning("Corrupt jikan_cache payload for key %s — ignoring", cache_key)
             return None
+
+    async def upsert_applied_rating(
+        self, plex_id: int, level: str, season_num: int, rating: float
+    ) -> None:
+        """Record a rating written to Plex (audit trail / future restore)."""
+        await self.conn.execute(
+            """
+            INSERT INTO applied_ratings (plex_id, level, season_num, rating, applied_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT (plex_id, level, season_num)
+            DO UPDATE SET rating = excluded.rating, applied_at = excluded.applied_at
+            """,
+            (plex_id, level, season_num, rating, utc_now_iso()),
+        )
+        await self.conn.commit()
 
     async def upsert_cached_json(self, cache_key: str, payload: dict | list) -> None:
         await self.conn.execute(

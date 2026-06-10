@@ -81,6 +81,17 @@ class OutputConfig:
 
 
 @dataclass(frozen=True)
+class ApplyConfig:
+    """Write MAL scores into Plex rating fields for Kometa overlays."""
+    enabled: bool = False
+    field: str = "audience"          # audience | user
+    show_average: str = "mean"       # mean | episode_weighted
+    min_confidence: str = "low"      # low | medium | high
+    lock_fields: bool = True
+    dry_run: bool = False
+
+
+@dataclass(frozen=True)
 class Override:
     """A single manual correction from overrides.yaml.
 
@@ -103,6 +114,7 @@ class Config:
     database: DatabaseConfig
     output: OutputConfig
     match: MatchConfig
+    apply: ApplyConfig
     schedule_interval_hours: int
     overrides_path: str
     overrides: list[Override] = field(default_factory=list)
@@ -246,6 +258,25 @@ def load_config(path: str | None = None) -> Config:
         ),
     )
 
+    apply_raw = raw.get("apply") or {}
+    apply_field = str(apply_raw.get("field", ApplyConfig.field))
+    if apply_field not in ("audience", "user"):
+        raise ConfigError("'apply.field' must be 'audience' or 'user'")
+    show_average = str(apply_raw.get("show_average", ApplyConfig.show_average))
+    if show_average not in ("mean", "episode_weighted"):
+        raise ConfigError("'apply.show_average' must be 'mean' or 'episode_weighted'")
+    min_confidence = str(apply_raw.get("min_confidence", ApplyConfig.min_confidence))
+    if min_confidence not in ("low", "medium", "high"):
+        raise ConfigError("'apply.min_confidence' must be low, medium or high")
+    apply = ApplyConfig(
+        enabled=bool(apply_raw.get("enabled", ApplyConfig.enabled)),
+        field=apply_field,
+        show_average=show_average,
+        min_confidence=min_confidence,
+        lock_fields=bool(apply_raw.get("lock_fields", ApplyConfig.lock_fields)),
+        dry_run=bool(apply_raw.get("dry_run", ApplyConfig.dry_run)),
+    )
+
     return Config(
         plex=plex,
         anime_lists=anime_lists,
@@ -253,6 +284,7 @@ def load_config(path: str | None = None) -> Config:
         database=database,
         output=output,
         match=match,
+        apply=apply,
         schedule_interval_hours=schedule_interval_hours,
         overrides_path=overrides_path,
         overrides=overrides,

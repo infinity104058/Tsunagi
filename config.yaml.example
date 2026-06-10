@@ -37,5 +37,19 @@ database:
 output:
   path: "/data/output.json"
 
+apply:
+  enabled: false                 # true = write MAL scores into Plex rating fields
+                                 # after each run (for Kometa overlays)
+  field: audience                # audience | user — which Plex rating to write
+  show_average: mean             # mean | episode_weighted — how the show-level
+                                 # rating is computed from its seasons; a show
+                                 # with one scored season just gets that score
+  min_confidence: low            # low | medium | high — seasons below this are
+                                 # not rated and don't count toward the average
+  lock_fields: true              # lock the field so Plex refreshes keep the value
+  dry_run: false                 # log what would change, write nothing
+  # NOTE: keep Kometa's mass_*_rating_update operations OFF for this library,
+  # or Kometa will overwrite these ratings on every run.
+
 overrides:
   path: "/data/overrides.yaml"   # Manual corrections; applied before any resolution

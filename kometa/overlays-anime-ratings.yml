@@ -1,0 +1,72 @@
+# MAL rating overlays for the anime library — companion to plex-mal-matcher.
+#
+# Data flow:
+#   plex-mal-matcher (apply stage) → Plex audienceRating on shows + seasons
+#     → these overlays render that value on the posters.
+#
+# Seasons carry their own per-season MAL score; the show poster carries the
+# average across scored seasons (or the sole season's score for one-season
+# shows). Items without an audienceRating (OVA bundles, unresolved shows)
+# get no badge at all — the filter below suppresses them.
+#
+# Syntax targets Kometa 2.x ("Overlay Files" custom text overlays;
+# <<audience_rating>> special text, builder_level: season). The built-in
+# `ratings` Default Overlay File is NOT used because it has no season level.
+#
+# Wire it up in Kometa's config.yml:
+#
+#   libraries:
+#     Anime Shows:
+#       remove_overlays: false
+#       overlay_files:
+#         - file: config/overlays-anime-ratings.yml
+#
+# IMPORTANT: do NOT enable mass_audience_rating_update /
+# mass_season_rating_update operations on this library — they would
+# overwrite the per-season values plex-mal-matcher wrote, every Kometa run.
+# (If you switch plex-mal-matcher's apply.field to "user", change
+# <<audience_rating>> / audience_rating.gte below to <<user_rating>> /
+# user_rating.gte, and avoid mass_user_rating_update instead.)
+
+overlays:
+  # ---- Show posters: average MAL score -------------------------------------
+  MAL Rating Show:
+    plex_all: true
+    filters:
+      audience_rating.gte: 0.1        # suppress badge when no rating present
+    overlay:
+      name: text(MAL <<audience_rating>>)
+      horizontal_align: left
+      horizontal_offset: 30
+      vertical_align: top
+      vertical_offset: 30
+      font_size: 63
+      font_color: "#FFFFFF"
+      back_color: "#2E51A2"           # MyAnimeList blue
+      back_radius: 14
+      back_width: 305
+      back_height: 105
+      back_padding: 15
+
+  # ---- Season posters: that season's own MAL score --------------------------
+  MAL Rating Season:
+    builder_level: season
+    plex_all: true
+    filters:
+      audience_rating.gte: 0.1
+    overlay:
+      name: text(MAL <<audience_rating>>)
+      horizontal_align: left
+      horizontal_offset: 30
+      vertical_align: top
+      vertical_offset: 30
+      font_size: 63
+      font_color: "#FFFFFF"
+      back_color: "#2E51A2"
+      back_radius: 14
+      back_width: 305
+      back_height: 105
+      back_padding: 15
+
+  # No episode-level overlays on purpose: the matcher produces season scores,
+  # episodes have nothing meaningful to display.

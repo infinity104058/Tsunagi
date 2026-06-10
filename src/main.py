@@ -27,7 +27,7 @@ import logging
 import sys
 from collections import Counter
 
-from src import exporter
+from src import exporter, plex_applier
 from src.anime_lists import AnimeLists
 from src.config import Config, ConfigError, load_config
 from src.database import Database
@@ -166,6 +166,22 @@ async def run_once(config: Config) -> None:
         results = [r for r in raw_results if r is not None]
 
         exporter.write(results, run_unresolved, config.output.path)
+
+        # ---- Apply stage: write scores into Plex for Kometa overlays --------
+        if config.apply.enabled:
+            plans, no_score = plex_applier.build_plans(results, shows, config.apply)
+            stats, written = await asyncio.to_thread(
+                plex_applier.apply_to_plex, plans, config.plex, config.apply
+            )
+            await plex_applier.record_writes(db, written)
+            log.info(
+                "Apply%s: %d show(s) updated, %d season(s) updated, "
+                "%d unchanged, %d skipped (no score / below min_confidence), "
+                "%d error(s)",
+                " (dry run)" if config.apply.dry_run else "",
+                stats.shows_updated, stats.seasons_updated,
+                stats.skipped_unchanged, no_score, stats.errors,
+            )
 
         # ---- Summary -------------------------------------------------------
         confidence_counts: Counter[str] = Counter()
