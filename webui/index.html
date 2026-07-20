@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>plex-mal-matcher</title>
+<style>
+  :root {
+    --bg:#0d1117; --surface:#161b22; --surface-2:#1c2230; --border:#2a3040;
+    --text:#e6e9ef; --muted:#8b94a7; --high:#4ade80; --medium:#fbbf24;
+    --low:#f87171; --unres:#a78bfa; --accent:#60a5fa;
+    --mono:"JetBrains Mono","Cascadia Code",Consolas,monospace;
+    --sans:"Inter",-apple-system,"Segoe UI",sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.5;min-height:100vh;padding:28px 20px 80px}
+  .wrap{max-width:1100px;margin:0 auto}
+  header{display:flex;align-items:center;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+  header h1{font-family:var(--mono);font-size:16px;font-weight:600}
+  header h1 .dim{color:var(--muted);font-weight:400}
+  .meta{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  .spacer{flex:1}
+  button{font-family:var(--mono);font-size:12px;padding:7px 14px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#0d1117;font-weight:600}
+  button.danger:hover{border-color:var(--low);color:var(--low)}
+  button:disabled{opacity:.5;cursor:default}
+  #runstate{font-family:var(--mono);font-size:12px;color:var(--medium)}
+
+  #triage{height:10px;border-radius:5px;overflow:hidden;margin:4px 0 6px;background:var(--surface);border:1px solid var(--border)}
+  #triage div{height:100%;float:left}
+  #triagelegend{font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:18px}
+  #triagelegend span{margin-right:16px}
+  #triagelegend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;font-style:normal}
+
+  #controls{display:flex;gap:10px;margin-bottom:18px;flex-wrap:wrap;align-items:center}
+  #search{background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:13px;padding:7px 12px;width:240px;outline:none}
+  #search:focus{border-color:var(--accent)}
+  .pill{font-family:var(--mono);font-size:12px;padding:6px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);color:var(--muted);cursor:pointer;user-select:none}
+  .pill.on{color:var(--text);border-color:var(--accent);background:var(--surface-2)}
+  #counts{font-family:var(--mono);font-size:12px;color:var(--muted)}
+
+  .show{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden}
+  .show-head{display:flex;align-items:baseline;gap:12px;padding:11px 16px;cursor:pointer}
+  .show-head:hover{background:var(--surface-2)}
+  .show-title{font-weight:600}
+  .show-sub{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .show-actions{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .dot{width:8px;height:8px;border-radius:50%;align-self:center;flex:none}
+  .xbtn{font-size:11px;padding:3px 9px}
+
+  table{width:100%;border-collapse:collapse}
+  th,td{text-align:left;padding:8px 14px;font-size:13px}
+  th{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;border-top:1px solid var(--border);border-bottom:1px solid var(--border);font-weight:500}
+  td{border-bottom:1px solid var(--border);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td.season{font-family:var(--mono);color:var(--muted);white-space:nowrap}
+  td.score{font-family:var(--mono);font-weight:600;white-space:nowrap}
+  td.notes{color:var(--muted);font-size:12px;max-width:300px}
+  .mal-title{display:block}
+  .mal-id{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .mal-id a{color:var(--muted);text-decoration:none;border-bottom:1px dotted var(--border)}
+  .mal-id a:hover{color:var(--accent)}
+  .badge{font-family:var(--mono);font-size:11px;padding:2px 8px;border-radius:4px;white-space:nowrap}
+  .b-high{color:var(--high);background:rgba(74,222,128,.1)}
+  .b-medium{color:var(--medium);background:rgba(251,191,36,.1)}
+  .b-low{color:var(--low);background:rgba(248,113,113,.12)}
+  .b-unres{color:var(--unres);background:rgba(167,139,250,.12)}
+  .b-ovr{color:var(--accent);background:rgba(96,165,250,.12)}
+  .method{font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .editbtn{font-size:11px;padding:3px 10px}
+
+  /* assign panel */
+  #modal-bg{display:none;position:fixed;inset:0;background:rgba(6,9,14,.7);z-index:40}
+  #modal{display:none;position:fixed;z-index:50;top:6vh;left:50%;transform:translateX(-50%);width:min(680px,94vw);max-height:86vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px}
+  #modal h2{font-family:var(--mono);font-size:14px;margin-bottom:4px}
+  #modal .sub{font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:14px}
+  .mrow{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
+  #msearch{flex:1;min-width:200px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:13px;padding:8px 12px;outline:none}
+  #msearch:focus{border-color:var(--accent)}
+  select,#mnote{background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--mono);font-size:12px;padding:7px 10px;outline:none}
+  #mnote{width:100%}
+  #mresults{margin:6px 0 14px}
+  .res{display:flex;gap:12px;align-items:baseline;padding:9px 12px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;cursor:pointer;background:var(--bg)}
+  .res:hover{border-color:var(--accent)}
+  .res.sel{border-color:var(--high);background:rgba(74,222,128,.06)}
+  .res .t{flex:1}
+  .res .m{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+  #selinfo{font-family:var(--mono);font-size:12px;color:var(--muted);margin-bottom:10px}
+  #selinfo b{color:var(--text)}
+  .mfoot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+  #mhint{font-size:12px;color:var(--muted);margin-top:10px}
+  label.chk{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;cursor:pointer}
+
+  #unresolved-section,#exclude-section{margin-top:30px}
+  h2.sect{font-family:var(--mono);font-size:13px;font-weight:600;margin-bottom:10px}
+  #unresolved-section h2{color:var(--unres)}
+  #exclude-section h2{color:var(--muted)}
+  .unres-item,.exc-item{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:9px 14px;margin-bottom:8px;font-size:13px;display:flex;gap:12px;align-items:center}
+  .unres-item{border-left:3px solid var(--unres)}
+  .why{color:var(--muted);font-family:var(--mono);font-size:12px}
+  #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-family:var(--mono);font-size:12px;display:none;z-index:60}
+  #empty{display:none;color:var(--muted);text-align:center;padding:40px;font-family:var(--mono);font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>plex-mal-matcher <span class="dim">/ manage</span></h1>
+      <div class="meta" id="genmeta">loading…</div>
+    </div>
+    <span class="spacer"></span>
+    <span id="runstate"></span>
+    <button id="runbtn" class="primary">Run now</button>
+  </header>
+
+  <div id="triage"></div>
+  <div id="triagelegend"></div>
+
+  <div id="controls">
+    <input type="text" id="search" placeholder="filter shows…">
+    <span class="pill" data-f="attention">⚠ needs review</span>
+    <span class="pill" data-f="overridden">✎ has override</span>
+    <span class="spacer"></span>
+    <span id="counts"></span>
+  </div>
+
+  <div id="shows"></div>
+  <div id="empty">nothing matches the current filters</div>
+
+  <div id="unresolved-section" style="display:none">
+    <h2 class="sect">unresolved</h2>
+    <div id="unresolved"></div>
+  </div>
+
+  <div id="exclude-section" style="display:none">
+    <h2 class="sect">excluded shows</h2>
+    <div id="excludes"></div>
+  </div>
+</div>
+
+<div id="modal-bg"></div>
+<div id="modal">
+  <h2 id="mtitle"></h2>
+  <div class="sub" id="msub"></div>
+  <div class="mrow">
+    <input type="text" id="msearch" placeholder="search MyAnimeList…">
+    <select id="mtype">
+      <option value="tv">TV</option><option value="movie">Movie</option>
+      <option value="ova">OVA</option><option value="ona">ONA</option>
+      <option value="special">Special</option>
+    </select>
+    <button id="msearchbtn">Search</button>
+  </div>
+  <div id="mresults"></div>
+  <div id="selinfo"></div>
+  <div class="mrow">
+    <label class="chk"><input type="checkbox" id="movabundle"> mark as OVA bundle (no score)</label>
+  </div>
+  <div class="mrow"><input type="text" id="mnote" placeholder="note (optional)"></div>
+  <div class="mfoot">
+    <button id="mdelete" class="danger" style="margin-right:auto;display:none">Remove override</button>
+    <button id="mcancel">Cancel</button>
+    <button id="msave" class="primary" disabled>Save override</button>
+  </div>
+  <div id="mhint">Select one entry for a direct match, several for a cour split
+    (the matcher weights by each entry's episode count). Overrides apply on the
+    next run.</div>
+</div>
+<div id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+var state=null, filters={attention:false,overridden:false}, searchTerm="";
+var modal={tvdb:null,season:null,selected:[],existing:null};
+var $=function(id){return document.getElementById(id);};
+function esc(t){var d=document.createElement("div");d.textContent=t==null?"":String(t);return d.innerHTML;}
+function toast(msg){var t=$("toast");t.textContent=msg;t.style.display="block";setTimeout(function(){t.style.display="none";},2600);}
+function api(method,path,body){
+  return fetch(path,{method:method,headers:{"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined})
+    .then(function(r){if(!r.ok)return r.json().catch(function(){return{};}).then(function(j){throw new Error(j.detail||r.status);});return r.json();});
+}
+
+function overrideFor(tvdb,season){
+  return (state.overrides||[]).find(function(o){
+    return Number(o.tvdb_id)===Number(tvdb)&&Number(o.season)===Number(season);});
+}
+function needsAttention(s){return s.confidence==="low"||["weighted_avg","shared_entry","unresolved"].indexOf(s.method)>=0;}
+
+function load(){
+  return fetch("/api/state").then(function(r){return r.json();}).then(function(d){
+    state=d; render(); renderStatus();
+  }).catch(function(e){$("genmeta").textContent="failed to load state: "+e;});
+}
+
+function renderStatus(){
+  var st=state.status||{};
+  var el=$("runstate");
+  if(st.matcher_running){el.textContent="⟳ matcher running…";$("runbtn").disabled=true;}
+  else if(st.wake_pending){el.textContent="run queued";$("runbtn").disabled=true;}
+  else{el.textContent="";$("runbtn").disabled=false;}
+  var out=state.output;
+  $("genmeta").textContent=out?("generated "+(out.generated_at||"?")+" · "+out.show_count+" shows · "+(out.unresolved_count||0)+" unresolved"):"no output.json yet — trigger a run";
+}
+
+function render(){
+  var out=state.output||{shows:{},unresolved:[]};
+  // triage
+  var c={high:0,medium:0,low:0,unres:0},rows=[];
+  Object.keys(out.shows||{}).forEach(function(t){
+    Object.keys(out.shows[t].seasons).forEach(function(n){
+      var s=out.shows[t].seasons[n];rows.push(s);
+      if(s.method==="unresolved")c.unres++;else c[s.confidence]=(c[s.confidence]||0)+1;});});
+  var total=rows.length||1,bar=$("triage");bar.innerHTML="";
+  [["high",c.high,"var(--high)"],["medium",c.medium,"var(--medium)"],["low",c.low,"var(--low)"],["unres",c.unres,"var(--unres)"]]
+    .forEach(function(seg){if(!seg[1])return;var d=document.createElement("div");d.style.width=(seg[1]/total*100)+"%";d.style.background=seg[2];bar.appendChild(d);});
+  $("triagelegend").innerHTML=
+    '<span><i style="background:var(--high)"></i>high '+c.high+"</span>"+
+    '<span><i style="background:var(--medium)"></i>medium '+c.medium+"</span>"+
+    '<span><i style="background:var(--low)"></i>low '+c.low+"</span>"+
+    '<span><i style="background:var(--unres)"></i>unresolved '+c.unres+"</span>";
+
+  // shows
+  var root=$("shows");root.innerHTML="";
+  var shownShows=0,shownSeasons=0;
+  Object.keys(out.shows||{}).sort(function(a,b){return a.localeCompare(b);}).forEach(function(title){
+    if(searchTerm&&title.toLowerCase().indexOf(searchTerm)===-1)return;
+    var show=out.shows[title];
+    var nums=Object.keys(show.seasons).sort(function(a,b){return a-b;});
+    var visible=nums.filter(function(n){
+      var s=show.seasons[n];
+      if(filters.attention&&!needsAttention(s))return false;
+      if(filters.overridden&&!overrideFor(show.tvdb_id,n))return false;
+      return true;});
+    if(!visible.length)return;
+    shownShows++;shownSeasons+=visible.length;
+    var worst=visible.reduce(function(acc,n){var s=show.seasons[n];
+      var r=s.method==="unresolved"?3:{high:0,medium:1,low:2}[s.confidence]||1;return Math.max(acc,r);},0);
+    var dot=["var(--high)","var(--medium)","var(--low)","var(--unres)"][worst];
+    var card=document.createElement("div");card.className="show";
+    var rowsHtml=visible.map(function(n){
+      var s=show.seasons[n];
+      var ovr=overrideFor(show.tvdb_id,n);
+      var malHtml=(s.mal_titles||[]).map(function(t,i){
+        var id=(s.mal_ids||[])[i];
+        return '<span class="mal-title">'+esc(t)+(id?' <span class="mal-id"><a href="https://myanimelist.net/anime/'+encodeURIComponent(id)+'" target="_blank" rel="noopener">#'+esc(id)+"</a></span>":"")+"</span>";}).join("")||'<span class="mal-id">—</span>';
+      var badge=s.method==="unresolved"?'<span class="badge b-unres">unresolved</span>':'<span class="badge b-'+esc(s.confidence)+'">'+esc(s.confidence)+"</span>";
+      if(ovr)badge+=' <span class="badge b-ovr">✎ override</span>';
+      return "<tr>"+
+        '<td class="season">S'+esc(n)+"</td>"+
+        "<td>"+malHtml+"</td>"+
+        '<td class="score">'+(s.score!=null?esc(Number(s.score).toFixed(2)):"—")+"</td>"+
+        "<td>"+badge+"</td>"+
+        '<td class="method">'+esc(s.method)+"</td>"+
+        '<td class="notes">'+esc(s.notes||"")+"</td>"+
+        '<td><button class="editbtn" data-tvdb="'+esc(show.tvdb_id)+'" data-season="'+esc(n)+'" data-title="'+esc(title)+'">✎</button></td>'+
+        "</tr>";}).join("");
+    card.innerHTML='<div class="show-head">'+
+      '<span class="dot" style="background:'+dot+'"></span>'+
+      '<span class="show-title">'+esc(title)+"</span>"+
+      '<span class="show-sub">tvdb '+esc(show.tvdb_id==null?"—":show.tvdb_id)+"</span>"+
+      '<span class="show-actions"><button class="xbtn danger" data-exclude="'+esc(title)+'">exclude</button></span>'+
+      "</div>"+
+      "<table><thead><tr><th>season</th><th>mal entry</th><th>score</th><th>confidence</th><th>method</th><th>notes</th><th></th></tr></thead><tbody>"+rowsHtml+"</tbody></table>";
+    card.querySelector(".show-head").addEventListener("click",function(e){
+      if(e.target.closest("button"))return;
+      var t=card.querySelector("table");t.style.display=t.style.display==="none"?"":"none";});
+    root.appendChild(card);
+  });
+  $("empty").style.display=shownSeasons?"none":"block";
+  $("counts").textContent=shownShows+" shows / "+shownSeasons+" seasons";
+
+  // unresolved
+  var un=out.unresolved||[];
+  $("unresolved-section").style.display=un.length?"block":"none";
+  $("unresolved").innerHTML=un.map(function(u){
+    return '<div class="unres-item"><div style="flex:1"><strong>'+esc(u.title)+"</strong>"+
+      (u.tvdb_id!=null?' <span class="why">tvdb '+esc(u.tvdb_id)+"</span>":"")+
+      '<div class="why">'+esc(u.reason||"")+"</div></div>"+
+      (u.tvdb_id!=null?'<button class="editbtn" data-tvdb="'+esc(u.tvdb_id)+'" data-season="1" data-title="'+esc(u.title)+'" data-unres="1">✎ map</button>':"")+
+      '<button class="xbtn danger" data-exclude="'+esc(u.title)+'">exclude</button>'+
+      "</div>";}).join("");
+
+  // excludes
+  var exc=(state.excludes.overrides||[]).map(function(v){return{v:v,ui:true};})
+    .concat((state.excludes.config||[]).map(function(v){return{v:v,ui:false};}));
+  $("exclude-section").style.display=exc.length?"block":"none";
+  $("excludes").innerHTML=exc.map(function(e){
+    return '<div class="exc-item"><span style="flex:1">'+esc(e.v)+"</span>"+
+      '<span class="why">'+(e.ui?"":"from config.yaml")+"</span>"+
+      (e.ui?'<button class="xbtn danger" data-unexclude="'+esc(e.v)+'">remove</button>':"")+
+      "</div>";}).join("");
+
+  bindDynamic();
+}
+
+function bindDynamic(){
+  document.querySelectorAll("[data-exclude]").forEach(function(b){
+    b.onclick=function(){
+      var v=b.getAttribute("data-exclude");
+      if(!confirm("Exclude '"+v+"' from matching and output?"))return;
+      api("PUT","/api/exclude",{value:v}).then(function(){toast("excluded — applies next run");load();}).catch(function(e){toast("error: "+e.message);});};});
+  document.querySelectorAll("[data-unexclude]").forEach(function(b){
+    b.onclick=function(){
+      api("DELETE","/api/exclude?value="+encodeURIComponent(b.getAttribute("data-unexclude")))
+        .then(function(){toast("removed");load();}).catch(function(e){toast("error: "+e.message);});};});
+  document.querySelectorAll(".editbtn").forEach(function(b){
+    b.onclick=function(){openModal(Number(b.getAttribute("data-tvdb")),Number(b.getAttribute("data-season")),b.getAttribute("data-title"),!!b.getAttribute("data-unres"));};});
+}
+
+// ---- assign modal ----
+function openModal(tvdb,season,title,unres){
+  modal.tvdb=tvdb;modal.season=season;modal.selected=[];
+  modal.existing=overrideFor(tvdb,season)||null;
+  $("mtitle").textContent=title+" — S"+season;
+  $("msub").textContent="tvdb "+tvdb+(unres?" · currently unresolved":"");
+  $("msearch").value=title;$("mresults").innerHTML="";$("mnote").value=modal.existing?(modal.existing.note||""):"";
+  $("movabundle").checked=modal.existing?(modal.existing.method==="ova_bundle"||modal.existing.type==="ova_bundle"):false;
+  $("mdelete").style.display=modal.existing?"":"none";
+  updateSel();
+  $("modal-bg").style.display="block";$("modal").style.display="block";
+  doSearch();
+}
+function closeModal(){$("modal-bg").style.display="none";$("modal").style.display="none";}
+function updateSel(){
+  var ova=$("movabundle").checked;
+  var n=modal.selected.length;
+  $("selinfo").innerHTML=ova?"OVA bundle — season will be listed unscored":
+    n===0?"nothing selected":
+    n===1?"<b>direct</b> match → MAL #"+modal.selected[0].mal_id:
+    "<b>cour split</b> ("+n+" entries, weighted avg) → "+modal.selected.map(function(s){return"#"+s.mal_id;}).join(", ");
+  $("msave").disabled=!ova&&n===0;
+}
+function doSearch(){
+  var q=$("msearch").value.trim();if(!q)return;
+  $("mresults").innerHTML='<div class="why">searching…</div>';
+  fetch("/api/search?q="+encodeURIComponent(q)+"&type="+$("mtype").value)
+    .then(function(r){if(!r.ok)throw new Error("search failed");return r.json();})
+    .then(function(res){
+      if(!res.length){$("mresults").innerHTML='<div class="why">no results</div>';return;}
+      $("mresults").innerHTML=res.map(function(e,i){
+        return '<div class="res" data-i="'+i+'"><div class="t">'+esc(e.title)+
+          (e.title_english&&e.title_english!==e.title?'<div class="why">'+esc(e.title_english)+"</div>":"")+"</div>"+
+          '<div class="m">'+esc(e.type||"?")+" · "+(e.episodes!=null?esc(e.episodes)+" eps":"? eps")+
+          " · "+(e.score!=null?esc(e.score):"—")+" · "+(e.aired_from?esc(String(e.aired_from).slice(0,4)):"?")+
+          ' · <a href="https://myanimelist.net/anime/'+encodeURIComponent(e.mal_id)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()">#'+esc(e.mal_id)+"</a></div></div>";}).join("");
+      document.querySelectorAll(".res").forEach(function(el){
+        el.onclick=function(){
+          var entry=res[Number(el.getAttribute("data-i"))];
+          var idx=modal.selected.findIndex(function(s){return s.mal_id===entry.mal_id;});
+          if(idx>=0){modal.selected.splice(idx,1);el.classList.remove("sel");}
+          else{modal.selected.push(entry);el.classList.add("sel");}
+          $("movabundle").checked=false;updateSel();};});
+    }).catch(function(e){$("mresults").innerHTML='<div class="why">'+esc(e.message)+"</div>";});
+}
+$("msearchbtn").onclick=doSearch;
+$("msearch").addEventListener("keydown",function(e){if(e.key==="Enter")doSearch();});
+$("movabundle").addEventListener("change",function(){if($("movabundle").checked)modal.selected=[];document.querySelectorAll(".res.sel").forEach(function(el){el.classList.remove("sel");});updateSel();});
+$("mcancel").onclick=closeModal;
+$("modal-bg").onclick=closeModal;
+$("msave").onclick=function(){
+  var body={tvdb_id:modal.tvdb,season:modal.season,
+    mal_ids:modal.selected.map(function(s){return s.mal_id;}),
+    note:$("mnote").value.trim()};
+  if($("movabundle").checked)body.method="ova_bundle";
+  api("PUT","/api/override",body)
+    .then(function(){toast("override saved — applies next run");closeModal();load();})
+    .catch(function(e){toast("error: "+e.message);});};
+$("mdelete").onclick=function(){
+  api("DELETE","/api/override?tvdb_id="+modal.tvdb+"&season="+modal.season)
+    .then(function(){toast("override removed");closeModal();load();})
+    .catch(function(e){toast("error: "+e.message);});};
+
+// ---- top controls ----
+$("runbtn").onclick=function(){
+  api("POST","/api/run").then(function(){toast("run triggered — matcher wakes within ~15s");renderStatusSoon();})
+    .catch(function(e){toast(e.message);});};
+function renderStatusSoon(){setTimeout(load,2000);}
+document.querySelectorAll(".pill").forEach(function(p){
+  p.onclick=function(){var f=p.getAttribute("data-f");filters[f]=!filters[f];p.classList.toggle("on",filters[f]);render();};});
+$("search").addEventListener("input",function(e){searchTerm=e.target.value.toLowerCase();render();});
+
+load();
+setInterval(function(){fetch("/api/state").then(function(r){return r.json();}).then(function(d){
+  var wasRunning=state&&state.status&&state.status.matcher_running;
+  var oldGen=state&&state.output&&state.output.generated_at;
+  state=d;renderStatus();
+  var newGen=d.output&&d.output.generated_at;
+  if((wasRunning&&!d.status.matcher_running)||(oldGen&&newGen&&oldGen!==newGen)){render();toast("run finished — data refreshed");}
+}).catch(function(){});},10000);
+})();
+</script>
+</body>
+</html>

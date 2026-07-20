@@ -17,3 +17,7 @@ overrides:
     mal_ids: [40028, 51535]
     method: weighted_avg
     note: "TVDB S4 only covers the first two Final Season entries"
+
+# Shows to exclude entirely (managed by the webui; same effect as
+# plex.exclude in config.yaml — titles or TVDB IDs)
+exclude: []

@@ -8,3 +8,16 @@ services:
       - CONFIG_PATH=/data/config.yaml
     volumes:
       - ./data:/data
+
+  webui:
+    build: .
+    container_name: plex-mal-matcher-webui
+    restart: unless-stopped
+    user: "568:568"
+    command: ["uvicorn", "src.webui:app", "--host", "0.0.0.0", "--port", "8484"]
+    environment:
+      - CONFIG_PATH=/data/config.yaml
+    volumes:
+      - ./data:/data
+    ports:
+      - "8484:8484"    # put behind Authentik/NPM — no auth of its own

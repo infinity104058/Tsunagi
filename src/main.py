@@ -24,7 +24,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
+from pathlib import Path
 from collections import Counter
 
 from src import exporter, plex_applier
@@ -114,101 +116,114 @@ async def _process_show(
 
 
 async def run_once(config: Config) -> None:
-    db = Database(
-        config.database.path,
-        score_ttl_days=config.database.score_ttl_days,
-        mapping_ttl_days=config.database.mapping_ttl_days,
-    )
-    await db.connect()
-    jikan = JikanClient(config.jikan, db)
+    flag = running_flag(config)
     try:
-        anime_lists = AnimeLists(config.anime_lists)
-        await anime_lists.ensure_loaded()
-
-        # plexapi is sync — keep it off the event loop. The Plex token is
-        # never logged.
-        shows = await asyncio.to_thread(get_anime_shows, config.plex)
-        if config.plex.exclude:
-            excluded_titles = {str(x).lower() for x in config.plex.exclude}
-            excluded_ids = {x for x in config.plex.exclude if isinstance(x, int)}
-            before = len(shows)
-            shows = [
-                s for s in shows
-                if s.title.lower() not in excluded_titles
-                and s.tvdb_id not in excluded_ids
-            ]
-            if before != len(shows):
-                log.info("Excluded %d show(s) via plex.exclude", before - len(shows))
-
-        resolver = Resolver(config, db, jikan, anime_lists)
-        aggregator = ScoreAggregator(jikan)
-        semaphore = asyncio.Semaphore(SHOW_CONCURRENCY)
-        run_unresolved: list[dict] = []
-
-        async def safe_process(show: PlexShow) -> exporter.ShowResult | None:
-            try:
-                return await _process_show(
-                    show, resolver, aggregator, db, semaphore, run_unresolved
-                )
-            except Exception:
-                log.exception("Unhandled error while processing '%s' — skipping", show.title)
-                run_unresolved.append(
-                    {
-                        "title": show.title,
-                        "tvdb_id": show.tvdb_id if show.tvdb_id is not None else -show.plex_id,
-                        "season_num": None,
-                        "reason": "Unhandled error during processing (see logs)",
-                    }
-                )
-                return None
-
-        raw_results = await asyncio.gather(*(safe_process(show) for show in shows))
-        results = [r for r in raw_results if r is not None]
-
-        exporter.write(results, run_unresolved, config.output.path)
-
-        # ---- Apply stage: write scores into Plex for Kometa overlays --------
-        if config.apply.enabled:
-            plans, no_score = plex_applier.build_plans(results, shows, config.apply)
-            stats, written = await asyncio.to_thread(
-                plex_applier.apply_to_plex, plans, config.plex, config.apply
-            )
-            await plex_applier.record_writes(db, written)
-            log.info(
-                "Apply%s: %d show(s) updated, %d season(s) updated, "
-                "%d unchanged, %d skipped (no score / below min_confidence), "
-                "%d error(s)",
-                " (dry run)" if config.apply.dry_run else "",
-                stats.shows_updated, stats.seasons_updated,
-                stats.skipped_unchanged, no_score, stats.errors,
-            )
-
-        # ---- Summary -------------------------------------------------------
-        confidence_counts: Counter[str] = Counter()
-        method_counts: Counter[str] = Counter()
-        seasons_resolved = 0
-        for result in results:
-            for score in result.seasons.values():
-                seasons_resolved += 1
-                confidence_counts[score.confidence] += 1
-                method_counts[score.method] += 1
-
-        log.info(
-            "Run complete: %d show(s) processed, %d in output, %d season(s) "
-            "resolved (high=%d medium=%d low=%d; %s), %d unresolved",
-            len(shows),
-            len(results),
-            seasons_resolved,
-            confidence_counts.get("high", 0),
-            confidence_counts.get("medium", 0),
-            confidence_counts.get("low", 0),
-            ", ".join(f"{m}={c}" for m, c in sorted(method_counts.items())) or "none",
-            len(run_unresolved),
+        flag.write_text("")
+    except OSError:
+        pass
+    try:
+        db = Database(
+            config.database.path,
+            score_ttl_days=config.database.score_ttl_days,
+            mapping_ttl_days=config.database.mapping_ttl_days,
         )
-    finally:
-        await jikan.close()
-        await db.close()
+        await db.connect()
+        jikan = JikanClient(config.jikan, db)
+        try:
+            anime_lists = AnimeLists(config.anime_lists)
+            await anime_lists.ensure_loaded()
 
+            # plexapi is sync — keep it off the event loop. The Plex token is
+            # never logged.
+            shows = await asyncio.to_thread(get_anime_shows, config.plex)
+            all_excludes = tuple(config.plex.exclude) + tuple(config.override_excludes)
+            if all_excludes:
+                excluded_titles = {str(x).lower() for x in all_excludes}
+                excluded_ids = {x for x in all_excludes if isinstance(x, int)}
+                before = len(shows)
+                shows = [
+                    s for s in shows
+                    if s.title.lower() not in excluded_titles
+                    and s.tvdb_id not in excluded_ids
+                ]
+                if before != len(shows):
+                    log.info("Excluded %d show(s) via exclude lists", before - len(shows))
+
+            resolver = Resolver(config, db, jikan, anime_lists)
+            aggregator = ScoreAggregator(jikan)
+            semaphore = asyncio.Semaphore(SHOW_CONCURRENCY)
+            run_unresolved: list[dict] = []
+
+            async def safe_process(show: PlexShow) -> exporter.ShowResult | None:
+                try:
+                    return await _process_show(
+                        show, resolver, aggregator, db, semaphore, run_unresolved
+                    )
+                except Exception:
+                    log.exception("Unhandled error while processing '%s' — skipping", show.title)
+                    run_unresolved.append(
+                        {
+                            "title": show.title,
+                            "tvdb_id": show.tvdb_id if show.tvdb_id is not None else -show.plex_id,
+                            "season_num": None,
+                            "reason": "Unhandled error during processing (see logs)",
+                        }
+                    )
+                    return None
+
+            raw_results = await asyncio.gather(*(safe_process(show) for show in shows))
+            results = [r for r in raw_results if r is not None]
+
+            exporter.write(results, run_unresolved, config.output.path)
+
+            # ---- Apply stage: write scores into Plex for Kometa overlays --------
+            if config.apply.enabled:
+                plans, no_score = plex_applier.build_plans(results, shows, config.apply)
+                stats, written = await asyncio.to_thread(
+                    plex_applier.apply_to_plex, plans, config.plex, config.apply
+                )
+                await plex_applier.record_writes(db, written)
+                log.info(
+                    "Apply%s: %d show(s) updated, %d season(s) updated, "
+                    "%d unchanged, %d skipped (no score / below min_confidence), "
+                    "%d error(s)",
+                    " (dry run)" if config.apply.dry_run else "",
+                    stats.shows_updated, stats.seasons_updated,
+                    stats.skipped_unchanged, no_score, stats.errors,
+                )
+
+            # ---- Summary -------------------------------------------------------
+            confidence_counts: Counter[str] = Counter()
+            method_counts: Counter[str] = Counter()
+            seasons_resolved = 0
+            for result in results:
+                for score in result.seasons.values():
+                    seasons_resolved += 1
+                    confidence_counts[score.confidence] += 1
+                    method_counts[score.method] += 1
+
+            log.info(
+                "Run complete: %d show(s) processed, %d in output, %d season(s) "
+                "resolved (high=%d medium=%d low=%d; %s), %d unresolved",
+                len(shows),
+                len(results),
+                seasons_resolved,
+                confidence_counts.get("high", 0),
+                confidence_counts.get("medium", 0),
+                confidence_counts.get("low", 0),
+                ", ".join(f"{m}={c}" for m, c in sorted(method_counts.items())) or "none",
+                len(run_unresolved),
+            )
+        finally:
+            await jikan.close()
+            await db.close()
+
+
+    finally:
+        try:
+            flag.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 async def main() -> None:
     _setup_logging()
@@ -234,7 +249,36 @@ async def main() -> None:
         except Exception:
             # One failed run must not kill the container.
             log.exception("Run failed — will retry at the next interval")
-        await asyncio.sleep(interval * 3600)
+        await _sleep_until_next_run(config, interval * 3600)
+
+
+def _data_dir(config: Config) -> Path:
+    return Path(config.output.path).parent
+
+
+def wake_file(config: Config) -> Path:
+    return _data_dir(config) / ".run-now"
+
+
+def running_flag(config: Config) -> Path:
+    return _data_dir(config) / ".matcher-running"
+
+
+async def _sleep_until_next_run(config: Config, total_seconds: float) -> None:
+    """Sleep in short slices, waking early if the webui drops a .run-now file."""
+    slept = 0.0
+    slice_s = 15.0
+    wf = wake_file(config)
+    while slept < total_seconds:
+        if wf.exists():
+            try:
+                wf.unlink()
+            except OSError:
+                pass
+            log.info("Wake file detected — starting run immediately")
+            return
+        await asyncio.sleep(min(slice_s, total_seconds - slept))
+        slept += slice_s
 
 
 if __name__ == "__main__":

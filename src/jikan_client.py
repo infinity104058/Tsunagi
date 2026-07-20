@@ -183,16 +183,16 @@ class JikanClient:
         await self._db.upsert_cached_json(cache_key, relations)
         return relations
 
-    async def search(self, query: str, type: str = "tv") -> list[dict]:
-        """GET /anime?q={query}&type={type}&limit=5 — normalised series list.
-        Cached in jikan_cache under "search:{type}:{query.lower()}"."""
-        cache_key = f"search:{type}:{query.lower()}"
+    async def search(self, query: str, type: str = "tv", limit: int = 5) -> list[dict]:
+        """GET /anime?q={query}&type={type} — normalised series list.
+        Cached in jikan_cache under "search:{type}:{limit}:{query.lower()}"."""
+        cache_key = f"search:{type}:{limit}:{query.lower()}"
         cached = await self._db.get_cached_json(cache_key)
         if cached is not None:
             return cached  # type: ignore[return-value]
 
         body = await self._request(
-            "/anime", params={"q": query, "type": type, "limit": 5}
+            "/anime", params={"q": query, "type": type, "limit": limit}
         )
         results = [normalise_series(item) for item in (body["data"] if body else [])]
         await self._db.upsert_cached_json(cache_key, results)

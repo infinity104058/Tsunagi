@@ -122,6 +122,9 @@ class Config:
     schedule_interval_hours: int
     overrides_path: str
     overrides: list[Override] = field(default_factory=list)
+    # Excludes managed via overrides.yaml (webui writes there so config.yaml
+    # comments survive); merged with plex.exclude at run time.
+    override_excludes: tuple = ()
 
 
 def _require(section: dict[str, Any], key: str, where: str) -> Any:
@@ -170,11 +173,11 @@ def _parse_override(raw: dict[str, Any], index: int) -> Override:
     )
 
 
-def _load_overrides(path: str) -> list[Override]:
+def _load_overrides(path: str) -> tuple[list[Override], tuple]:
     p = Path(path)
     if not p.exists():
         log.info("No overrides file at %s — continuing without overrides", path)
-        return []
+        return [], ()
     try:
         raw = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
     except yaml.YAMLError as exc:
@@ -185,8 +188,14 @@ def _load_overrides(path: str) -> list[Override]:
         raise ConfigError(f"'overrides' in {path} must be a list")
 
     overrides = [_parse_override(entry, i) for i, entry in enumerate(entries)]
-    log.info("Loaded %d override(s) from %s", len(overrides), path)
-    return overrides
+
+    excludes_raw = raw.get("exclude") or []
+    if not isinstance(excludes_raw, list):
+        raise ConfigError(f"'exclude' in {path} must be a list")
+
+    log.info("Loaded %d override(s), %d exclude(s) from %s",
+             len(overrides), len(excludes_raw), path)
+    return overrides, tuple(excludes_raw)
 
 
 def load_config(path: str | None = None) -> Config:
@@ -249,7 +258,7 @@ def load_config(path: str | None = None) -> Config:
         raise ConfigError("schedule_interval_hours must be >= 0")
 
     overrides_path = str(_require(overrides_raw, "path", "overrides"))
-    overrides = _load_overrides(overrides_path)
+    overrides, override_excludes = _load_overrides(overrides_path)
 
     match_raw = raw.get("match") or {}
     season_zero = str(match_raw.get("season_zero", MatchConfig.season_zero))
@@ -296,4 +305,5 @@ def load_config(path: str | None = None) -> Config:
         schedule_interval_hours=schedule_interval_hours,
         overrides_path=overrides_path,
         overrides=overrides,
+        override_excludes=override_excludes,
     )
