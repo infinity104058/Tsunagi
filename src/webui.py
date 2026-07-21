@@ -25,6 +25,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
 
+from src import __version__
 from src.config import ConfigError, _parse_override, load_config
 from src.database import Database
 from src.jikan_client import JikanClient
@@ -33,7 +34,7 @@ from src.main import running_flag, wake_file
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
 
-app = FastAPI(title="plex-mal-matcher webui", docs_url=None, redoc_url=None)
+app = FastAPI(title="plex-mal-matcher webui", version=__version__, docs_url=None, redoc_url=None)
 
 _HTML = Path(__file__).parent.parent / "webui" / "index.html"
 
@@ -120,6 +121,7 @@ async def state():
             log.warning("Could not read output.json: %s", exc)
     ov = _read_overrides_raw(cfg.overrides_path)
     return {
+        "version": __version__,
         "output": output,
         "overrides": ov["overrides"],
         "excludes": {

@@ -29,6 +29,7 @@ import sys
 from pathlib import Path
 from collections import Counter
 
+from src import __version__
 from src import exporter, plex_applier
 from src.anime_lists import AnimeLists
 from src.config import Config, ConfigError, load_config
@@ -227,6 +228,7 @@ async def run_once(config: Config) -> None:
 
 async def main() -> None:
     _setup_logging()
+    log.info("plex-mal-matcher v%s starting", __version__)
     try:
         config = load_config()
     except ConfigError as exc:

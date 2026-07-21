@@ -107,7 +107,7 @@
 <div class="wrap">
   <header>
     <div>
-      <h1>plex-mal-matcher <span class="dim">/ manage</span></h1>
+      <h1>plex-mal-matcher <span class="dim">/ manage</span> <span class="dim" id="version" style="font-size:11px"></span></h1>
       <div class="meta" id="genmeta">loading…</div>
     </div>
     <span class="spacer"></span>
@@ -196,6 +196,7 @@ function load(){
 }
 
 function renderStatus(){
+  if(state.version){var v=$("version");if(v)v.textContent="v"+state.version;}
   var st=state.status||{};
   var el=$("runstate");
   if(st.matcher_running){el.textContent="⟳ matcher running…";$("runbtn").disabled=true;}
