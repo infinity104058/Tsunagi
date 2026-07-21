@@ -26,6 +26,13 @@ log = logging.getLogger(__name__)
 
 OVA_SEASON_ZERO_MAX_EPISODES = 6
 OVA_CLUSTER_DISTANCE_DAYS = 183  # ~6 months
+# A "bundle of loose extras" is by definition short. A full-length season
+# (many regularly-aired episodes) is never an OVA bundle no matter what a
+# sparse or broken relation chain implies about air-date distance — this
+# guards franchises whose siblings link via Side Story/Spin-off (e.g.
+# A Certain Scientific Railgun), which the chain builder does not follow,
+# leaving the chain empty/mismatched for those seasons.
+OVA_BUNDLE_MAX_EPISODES = 6
 
 CONFIDENCE_LEVELS = ["low", "medium", "high"]
 
@@ -90,9 +97,20 @@ def _is_ova_bundle(season: PlexSeason, chain: list[dict]) -> bool:
         return True
 
     # All dated episodes clustering > 6 months from every chain entry's air
-    # window also marks the season as a bundle of loose extras.
+    # window also marks the season as a bundle of loose extras — but only for
+    # genuinely short seasons, and only when the chain is substantial enough
+    # to trust its windows. Otherwise a broken/sparse chain (siblings linked
+    # via Side Story/Spin-off, which we don't follow) would falsely condemn a
+    # full regular season.
     dated = season.dated_episodes
     if not dated or not chain:
+        return False
+    if season.episode_count > OVA_BUNDLE_MAX_EPISODES:
+        return False
+    # Need at least as many chain entries as would plausibly cover this
+    # season; a single distant entry is not enough to declare the whole
+    # season "far from the chain".
+    if len(chain) < 2 and season.episode_count > 3:
         return False
 
     windows: list[tuple[date, date]] = []

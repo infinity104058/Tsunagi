@@ -21,7 +21,7 @@ match:
                                  # false keeps Movie-type MAL entries out of matching
 
 jikan:
-  base_url: "https://api.jikan.moe/v4"
+  base_url: "https://api.tenrai.org/v1"    #   "https://api.jikan.moe/v4" As backup
   rate_limit_per_second: 3       # Hard limit — do not exceed
   rate_limit_per_minute: 60      # Jikan also enforces a 60/min limit
   retry_attempts: 3
