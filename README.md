@@ -13,6 +13,32 @@ caches the result, and lets you override anything it gets wrong.
 
 ---
 
+## Status
+
+A personal homelab project, built with heavy AI assistance and maintained by one
+person in their spare time. It runs well against my own library, but it isn't
+exhaustively tested across setups, has no CI test suite, and support is
+best-effort. Contributions and bug reports are welcome.
+
+### Known limitations
+
+- **Very long or structurally messy franchises resolve poorly.** Shows with
+  hundreds of episodes and idiosyncratic TVDB season structures — One Piece,
+  Pokémon, long-running Precure, etc. — are where the automatic matching is
+  least reliable. Their relation chains are huge, their TVDB↔MAL season
+  boundaries rarely line up, and MAL often splits them differently again. Expect
+  to fix these by hand in the web UI, or exclude them entirely (`plex.exclude`)
+  if you don't care about scoring them.
+- **Confidence is corroboration, not correctness.** A correct match can still be
+  labelled `low` when there was no relation chain to cross-check it against (see
+  [How matching works](#how-matching-works)). Use `low` as "worth a glance," not
+  "wrong."
+- **Franchises that branch via side stories / spin-offs** (e.g. the Index /
+  Railgun family) can resolve at low confidence, because the chain builder does
+  not follow those relation types. These usually need a manual override.
+
+---
+
 ## What it does
 
 1. Reads every anime show and season from a Plex library.
