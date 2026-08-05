@@ -9,7 +9,7 @@ a circular import: season_matcher imports edge_cases, never the reverse).
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 
 from src.plex_client import PlexSeason

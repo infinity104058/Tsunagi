@@ -256,7 +256,9 @@ function render(){
         "<td>"+badge+"</td>"+
         '<td class="method">'+esc(s.method)+"</td>"+
         '<td class="notes">'+esc(s.notes||"")+"</td>"+
-        '<td><button class="editbtn" data-tvdb="'+esc(show.tvdb_id)+'" data-season="'+esc(n)+'" data-title="'+esc(title)+'">✎</button></td>'+
+        '<td>'+(show.tvdb_id==null
+          ?'<button class="editbtn" disabled title="Overrides need a TVDB ID — this show has none, so a saved override could never apply">✎</button>'
+          :'<button class="editbtn" data-tvdb="'+esc(show.tvdb_id)+'" data-season="'+esc(n)+'" data-title="'+esc(title)+'">✎</button>')+'</td>'+
         "</tr>";}).join("");
     card.innerHTML='<div class="show-head">'+
       '<span class="dot" style="background:'+dot+'"></span>'+

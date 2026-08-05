@@ -23,10 +23,9 @@ per run so one failed run does not kill the container.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
-import os
 import sys
-from pathlib import Path
 from collections import Counter
 
 from src import __version__
@@ -37,6 +36,12 @@ from src.database import Database
 from src.jikan_client import JikanClient
 from src.plex_client import PlexShow, get_anime_shows
 from src.resolver import Resolver
+from src.runstate import (
+    clear_running_flag,
+    heartbeat,
+    wake_file,
+    write_running_flag,
+)
 from src.score_aggregator import ScoreAggregator
 
 log = logging.getLogger("plex-mal-matcher")
@@ -117,16 +122,16 @@ async def _process_show(
 
 
 async def run_once(config: Config) -> None:
-    flag = running_flag(config)
-    try:
-        flag.write_text("")
-    except OSError:
-        pass
+    # Self-expiring run flag: the heartbeat keeps the mtime fresh so the webui
+    # can distinguish a live run from a flag orphaned by SIGKILL/OOM.
+    flag = write_running_flag(config)
+    heartbeat_task = asyncio.create_task(heartbeat(flag))
     try:
         db = Database(
             config.database.path,
             score_ttl_days=config.database.score_ttl_days,
             mapping_ttl_days=config.database.mapping_ttl_days,
+            relations_ttl_days=config.database.relations_ttl_days,
         )
         await db.connect()
         jikan = JikanClient(config.jikan, db)
@@ -221,10 +226,11 @@ async def run_once(config: Config) -> None:
 
 
     finally:
-        try:
-            flag.unlink(missing_ok=True)
-        except OSError:
-            pass
+        heartbeat_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await heartbeat_task
+        clear_running_flag(config)
+
 
 async def main() -> None:
     _setup_logging()
@@ -233,37 +239,34 @@ async def main() -> None:
         config = load_config()
     except ConfigError as exc:
         log.error("Configuration error: %s", exc)
+        # docker-compose restarts us on failure; sleep first so a config typo
+        # produces a slow, readable loop instead of an endless crash scroll.
+        await asyncio.sleep(60)
         sys.exit(1)
 
-    interval = config.schedule_interval_hours
-    if interval == 0:
+    if config.schedule_interval_hours == 0:
         log.info("schedule_interval_hours=0 — running once and exiting")
         await run_once(config)
         return
 
+    interval = config.schedule_interval_hours
     log.info("Scheduled mode: running every %d hour(s)", interval)
     while True:
         try:
             # Reload config each cycle so override/file edits apply without a
-            # container restart.
+            # container restart — including the interval itself.
             config = load_config()
+            if config.schedule_interval_hours != interval:
+                interval = config.schedule_interval_hours
+                log.info("Schedule interval changed to %d hour(s)", interval)
             await run_once(config)
         except Exception:
             # One failed run must not kill the container.
             log.exception("Run failed — will retry at the next interval")
+        if interval == 0:
+            log.info("schedule_interval_hours is now 0 — exiting after this run")
+            return
         await _sleep_until_next_run(config, interval * 3600)
-
-
-def _data_dir(config: Config) -> Path:
-    return Path(config.output.path).parent
-
-
-def wake_file(config: Config) -> Path:
-    return _data_dir(config) / ".run-now"
-
-
-def running_flag(config: Config) -> Path:
-    return _data_dir(config) / ".matcher-running"
 
 
 async def _sleep_until_next_run(config: Config, total_seconds: float) -> None:

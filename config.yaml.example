@@ -36,6 +36,9 @@ database:
   path: "/data/matcher.db"
   score_ttl_days: 7              # Re-fetch MAL scores older than this
   mapping_ttl_days: 30           # Re-resolve TVDB→MAL mappings older than this
+  relations_ttl_days: 90         # Re-fetch MAL relation graphs older than this
+                                 # (prequel/sequel topology is near-static, so
+                                 # much longer than score_ttl_days; optional)
 
 output:
   path: "/data/output.json"

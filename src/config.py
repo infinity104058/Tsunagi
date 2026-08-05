@@ -73,6 +73,9 @@ class DatabaseConfig:
     path: str
     score_ttl_days: int
     mapping_ttl_days: int
+    # Relation graphs (prequel/sequel topology) are essentially static on MAL,
+    # unlike scores — so they get a much longer TTL than score_ttl_days.
+    relations_ttl_days: int = 90
 
 
 @dataclass(frozen=True)
@@ -133,7 +136,9 @@ def _require(section: dict[str, Any], key: str, where: str) -> Any:
     return section[key]
 
 
-def _parse_override(raw: dict[str, Any], index: int) -> Override:
+def parse_override(raw: dict[str, Any], index: int) -> Override:
+    """Validate one raw override mapping. Public because the webui validates
+    entries with exactly the same rules the matcher will apply."""
     if not isinstance(raw, dict):
         raise ConfigError(f"Override #{index} is not a mapping")
 
@@ -187,7 +192,7 @@ def _load_overrides(path: str) -> tuple[list[Override], tuple]:
     if not isinstance(entries, list):
         raise ConfigError(f"'overrides' in {path} must be a list")
 
-    overrides = [_parse_override(entry, i) for i, entry in enumerate(entries)]
+    overrides = [parse_override(entry, i) for i, entry in enumerate(entries)]
 
     excludes_raw = raw.get("exclude") or []
     if not isinstance(excludes_raw, list):
@@ -250,6 +255,7 @@ def load_config(path: str | None = None) -> Config:
         path=str(_require(database_raw, "path", "database")),
         score_ttl_days=int(_require(database_raw, "score_ttl_days", "database")),
         mapping_ttl_days=int(_require(database_raw, "mapping_ttl_days", "database")),
+        relations_ttl_days=int(database_raw.get("relations_ttl_days", 90)),
     )
     output = OutputConfig(path=str(_require(output_raw, "path", "output")))
 

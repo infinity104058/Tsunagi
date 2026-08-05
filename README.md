@@ -346,6 +346,22 @@ To force re-resolution of the whole library after a matching change, set
 
 ---
 
+## Development
+
+Run the test suite locally before committing:
+
+```bash
+pip install -r requirements.txt
+pytest
+```
+
+The tests cover season matching (cour splits, shared entries, OVA detection,
+movie handling, season-zero policy), config and override parsing, the Plex
+rating applier, SQLite persistence, and the web UI API — no live Plex, Jikan,
+or network access required.
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

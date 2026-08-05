@@ -25,7 +25,7 @@ from src.config import Config, Override
 from src.database import Database
 from src.jikan_client import JikanClient
 from src.plex_client import PlexSeason, PlexShow
-from src.season_matcher import MatchOptions, SeasonMatch, match_seasons, reduce_confidence
+from src.season_matcher import MatchOptions, match_seasons, reduce_confidence
 
 log = logging.getLogger(__name__)
 
@@ -159,9 +159,7 @@ class Resolver:
             if match.method == "unresolved":
                 res = await self._mark_unresolved(
                     show,
-                    match_season := next(
-                        s for s in pending if s.season_num == match.season_num
-                    ),
+                    next(s for s in pending if s.season_num == match.season_num),
                     match.notes or "Season matcher found no usable candidate",
                 )
                 resolutions.append(res)

@@ -14,12 +14,12 @@ Matching logic, run in order per season:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
 
 from src import edge_cases
 from src.anime_lists import AnimeListEntry
-from src.edge_cases import entry_window, parse_date
+from src.edge_cases import entry_window
 from src.plex_client import PlexSeason, PlexShow
 
 log = logging.getLogger(__name__)
@@ -124,7 +124,10 @@ def _is_ova_bundle(season: PlexSeason, chain: list[dict]) -> bool:
 
     for ep in dated:
         ep_date = ep.air_date
-        assert ep_date is not None
+        if ep_date is None:
+            # dated_episodes already filters these; explicit check rather than
+            # an assert because asserts vanish under `python -O`.
+            continue
         min_distance = min(
             0
             if start <= ep_date <= end

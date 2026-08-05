@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import random
 import time
 from collections import deque
 from typing import Any
@@ -118,19 +119,14 @@ class JikanClient:
         """
         last_exc: Exception | None = None
         for attempt in range(1, self._cfg.retry_attempts + 1):
+            final = attempt == self._cfg.retry_attempts
             await self._limiter.acquire()
             try:
                 resp = await self._client.get(path, params=params)
             except httpx.HTTPError as exc:
                 # Network-level failure: treat like a retryable response.
                 last_exc = exc
-                backoff = self._cfg.retry_backoff_seconds * attempt
-                log.warning(
-                    "Jikan request %s failed (%s) — retry %d/%d in %.1fs",
-                    path, exc.__class__.__name__, attempt,
-                    self._cfg.retry_attempts, backoff,
-                )
-                await asyncio.sleep(backoff)
+                await self._retry_wait(path, exc.__class__.__name__, attempt, final, None)
                 continue
 
             if resp.status_code == 200:
@@ -138,13 +134,10 @@ class JikanClient:
             if resp.status_code == 404:
                 return None
             if resp.status_code in RETRYABLE_STATUS:
-                backoff = self._cfg.retry_backoff_seconds * attempt
-                log.warning(
-                    "Jikan returned %d for %s — retry %d/%d in %.1fs",
-                    resp.status_code, path, attempt,
-                    self._cfg.retry_attempts, backoff,
+                await self._retry_wait(
+                    path, str(resp.status_code), attempt, final,
+                    resp.headers.get("Retry-After"),
                 )
-                await asyncio.sleep(backoff)
                 continue
             # Any other non-200: raise immediately.
             resp.raise_for_status()
@@ -154,6 +147,36 @@ class JikanClient:
         raise RuntimeError(
             f"Jikan request {path} exhausted {self._cfg.retry_attempts} retries"
         )
+
+    async def _retry_wait(
+        self, path: str, why: str, attempt: int, final: bool, retry_after: str | None
+    ) -> None:
+        """Log a transient failure and sleep before the next attempt. No sleep
+        after the final attempt — the caller is about to raise anyway."""
+        if final:
+            log.warning(
+                "Jikan request %s failed (%s) — giving up after %d attempt(s)",
+                path, why, attempt,
+            )
+            return
+        backoff: float | None = None
+        if retry_after is not None:
+            # Honour a server-supplied delay (seconds form only; the HTTP-date
+            # form falls through to the computed backoff).
+            try:
+                backoff = max(float(retry_after), 0.0)
+            except ValueError:
+                pass
+        if backoff is None:
+            base = self._cfg.retry_backoff_seconds * attempt
+            # Jitter de-synchronises the concurrent show tasks, which would
+            # otherwise all retry against a struggling upstream in lockstep.
+            backoff = base + random.uniform(0, base * 0.25)
+        log.warning(
+            "Jikan request %s failed (%s) — retry %d/%d in %.1fs",
+            path, why, attempt, self._cfg.retry_attempts, backoff,
+        )
+        await asyncio.sleep(backoff)
 
     # ------------------------------------------------------------------ #
 

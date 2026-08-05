@@ -22,14 +22,16 @@ from typing import Any
 
 import yaml
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from src import __version__
-from src.config import ConfigError, _parse_override, load_config
+from src.config import ConfigError, load_config, parse_override
 from src.database import Database
 from src.jikan_client import JikanClient
-from src.main import running_flag, wake_file
+# runstate, not main: importing src.main would drag in plexapi and the whole
+# matcher graph just for two path helpers.
+from src.runstate import matcher_running, wake_file
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
@@ -58,7 +60,8 @@ async def _jikan() -> JikanClient:
         cache_path = str(Path(cfg.database.path).parent / "webui-cache.db")
         db = Database(cache_path,
                       score_ttl_days=cfg.database.score_ttl_days,
-                      mapping_ttl_days=cfg.database.mapping_ttl_days)
+                      mapping_ttl_days=cfg.database.mapping_ttl_days,
+                      relations_ttl_days=cfg.database.relations_ttl_days)
         await db.connect()
         _state["db"] = db
         _state["jikan"] = JikanClient(cfg.jikan, db)
@@ -129,7 +132,9 @@ async def state():
             "overrides": ov["exclude"],
         },
         "status": {
-            "matcher_running": running_flag(cfg).exists(),
+            # Staleness-aware: an orphaned flag (SIGKILL mid-run) must not
+            # report as running forever.
+            "matcher_running": matcher_running(cfg),
             "wake_pending": wake_file(cfg).exists(),
         },
     }
@@ -159,6 +164,11 @@ class OverrideBody(BaseModel):
 
 @app.put("/api/override")
 async def put_override(body: OverrideBody):
+    # Backstop for shows with no TVDB GUID: the resolver keys overrides on
+    # tvdb_id, so anything non-positive would save "successfully" and never
+    # apply (the UI's Number("") → 0 path used to hit exactly this).
+    if body.tvdb_id <= 0:
+        raise HTTPException(422, "overrides require a positive TVDB ID")
     cfg = _config()
     entry: dict[str, Any] = {"tvdb_id": body.tvdb_id, "season": body.season}
     if body.mal_ids:
@@ -171,7 +181,7 @@ async def put_override(body: OverrideBody):
     if body.note:
         entry["note"] = body.note
     try:
-        _parse_override(entry, 0)  # validate exactly like the matcher will
+        parse_override(entry, 0)  # validate exactly like the matcher will
     except ConfigError as exc:
         raise HTTPException(422, str(exc))
 
@@ -236,7 +246,7 @@ async def delete_exclude(value: str):
 @app.post("/api/run")
 async def trigger_run():
     cfg = _config()
-    if running_flag(cfg).exists():
+    if matcher_running(cfg):
         raise HTTPException(409, "matcher is already running")
     wf = wake_file(cfg)
     if wf.exists():
