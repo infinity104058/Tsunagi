@@ -44,7 +44,7 @@ from src.runstate import (
 )
 from src.score_aggregator import ScoreAggregator
 
-log = logging.getLogger("plex-mal-matcher")
+log = logging.getLogger("tsunagi")
 
 SHOW_CONCURRENCY = 5
 
@@ -234,7 +234,7 @@ async def run_once(config: Config) -> None:
 
 async def main() -> None:
     _setup_logging()
-    log.info("plex-mal-matcher v%s starting", __version__)
+    log.info("Tsunagi v%s starting", __version__)
     try:
         config = load_config()
     except ConfigError as exc:

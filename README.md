@@ -1,4 +1,6 @@
-# plex-mal-matcher
+# Tsunagi
+
+*Formerly `plex-mal-matcher`.*
 
 Resolve the anime seasons in a Plex library to their [MyAnimeList](https://myanimelist.net)
 entries, fetch per-season MAL scores, and surface those scores as poster
@@ -63,8 +65,8 @@ Two containers built from one image, sharing a `/data` volume:
 
 | Container | Role |
 |-----------|------|
-| `plex-mal-matcher` | The matcher. Runs on a schedule (or once), writes `output.json`, optionally applies ratings to Plex. |
-| `plex-mal-matcher-webui` | FastAPI + static UI on port `8484`. Reads `output.json`, writes `overrides.yaml`, triggers runs. |
+| `tsunagi` | The matcher. Runs on a schedule (or once), writes `output.json`, optionally applies ratings to Plex. |
+| `tsunagi-webui` | FastAPI + static UI on port `8484`. Reads `output.json`, writes `overrides.yaml`, triggers runs. |
 
 Everything the matcher needs — cache, config, mappings, output — lives in the
 `/data` volume as plain files and a SQLite database. Nothing is stored inside
@@ -116,8 +118,8 @@ The response schema is identical across these; only the base URL changes.
 ### 1. Get the source into your stack directory
 
 ```bash
-git clone https://your.gitea/you/plex-mal-matcher.git plex-mal-matcher
-cd plex-mal-matcher
+git clone https://your.gitea/you/Tsunagi.git tsunagi
+cd tsunagi
 ```
 
 The `docker-compose.yml` uses `build: .`, so the source lives in the stack

@@ -1,4 +1,4 @@
-"""Web UI sidecar for plex-mal-matcher.
+"""Web UI sidecar for Tsunagi.
 
 Runs as a second service from the same image (uvicorn src.webui:app).
 Shares /data with the matcher:
@@ -36,7 +36,7 @@ from src.runstate import matcher_running, wake_file
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
 
-app = FastAPI(title="plex-mal-matcher webui", version=__version__, docs_url=None, redoc_url=None)
+app = FastAPI(title="Tsunagi webui", version=__version__, docs_url=None, redoc_url=None)
 
 _HTML = Path(__file__).parent.parent / "webui" / "index.html"
 
@@ -94,7 +94,7 @@ def _read_overrides_raw(path: str) -> dict:
 
 def _write_overrides_raw(path: str, data: dict) -> None:
     header = (
-        "# Managed by plex-mal-matcher webui — hand edits are preserved but\n"
+        "# Managed by Tsunagi webui — hand edits are preserved but\n"
         "# comments are not. 'overrides' = manual season mappings,\n"
         "# 'exclude' = shows skipped entirely (titles or TVDB IDs).\n"
     )

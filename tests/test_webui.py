@@ -62,7 +62,7 @@ def test_state_never_leaks_token(client):
 def test_index_served(client):
     c, _ = client
     r = c.get("/")
-    assert r.status_code == 200 and "plex-mal-matcher" in r.text
+    assert r.status_code == 200 and "Tsunagi" in r.text
 
 
 def test_override_save_and_read_back(client):

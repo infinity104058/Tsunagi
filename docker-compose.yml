@@ -1,7 +1,7 @@
 services:
-  plex-mal-matcher:
+  tsunagi:
     build: .
-    container_name: plex-mal-matcher
+    container_name: tsunagi
     restart: unless-stopped
     user: "568:568"    # apps:apps — matches host appdata ownership
     environment:
@@ -11,7 +11,7 @@ services:
 
   webui:
     build: .
-    container_name: plex-mal-matcher-webui
+    container_name: tsunagi-webui
     restart: unless-stopped
     user: "568:568"
     command: ["uvicorn", "src.webui:app", "--host", "0.0.0.0", "--port", "8484"]
