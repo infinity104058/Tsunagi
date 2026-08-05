@@ -22,6 +22,10 @@ venv/
 .pytest_cache/
 .mypy_cache/
 
+# AI session context — local working docs, not part of the release
+CLAUDE.md
+CODE_REVIEW.md
+
 # Editor / OS
 .vscode/
 .idea/
