@@ -217,6 +217,7 @@ UI's "Run now" button wakes the loop early.
 | `path` | SQLite DB path. |
 | `score_ttl_days` | Re-fetch MAL scores older than this (default 7). |
 | `mapping_ttl_days` | Re-resolve TVDB→MAL mappings older than this (default 30). Set to `0` for one run to force a full re-resolution. |
+| `relations_ttl_days` | Re-fetch MAL relation graphs older than this (default 90, optional). Relation topology is near-static, so this is deliberately much longer than `score_ttl_days` — it spares the most Jikan-intensive step of a run. |
 
 ### `output`
 | Key | Description |
@@ -353,7 +354,7 @@ To force re-resolution of the whole library after a matching change, set
 Run the test suite locally before committing:
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 pytest
 ```
 
