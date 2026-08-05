@@ -1,7 +1,7 @@
 services:
-  plex-mal-matcher:
+  tsunagi:
     build: .
-    container_name: plex-mal-matcher
+    container_name: tsunagi
     restart: unless-stopped
     user: "568:568"    # apps:apps — matches host appdata ownership
     environment:
@@ -11,7 +11,7 @@ services:
 
   webui:
     build: .
-    container_name: plex-mal-matcher-webui
+    container_name: tsunagi-webui
     restart: unless-stopped
     user: "568:568"
     command: ["uvicorn", "src.webui:app", "--host", "0.0.0.0", "--port", "8484"]
@@ -21,3 +21,10 @@ services:
       - ./data:/data
     ports:
       - "8484:8484"    # put behind Authentik/NPM — no auth of its own
+    healthcheck:
+      # python urllib — the slim base image has no curl/wget.
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8484/', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

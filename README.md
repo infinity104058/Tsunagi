@@ -1,4 +1,6 @@
-# plex-mal-matcher
+# Tsunagi
+
+*Formerly `plex-mal-matcher`.*
 
 Resolve the anime seasons in a Plex library to their [MyAnimeList](https://myanimelist.net)
 entries, fetch per-season MAL scores, and surface those scores as poster
@@ -10,6 +12,32 @@ MAL disagree about what a *season* is. A single Plex season can be a cour split
 across two MAL entries; one MAL entry can span two Plex seasons; movies and OVAs
 muddy the mapping further. This tool does the reconciliation deterministically,
 caches the result, and lets you override anything it gets wrong.
+
+---
+
+## Status
+
+A personal homelab project, built with heavy AI assistance and maintained by one
+person in their spare time. It runs well against my own library, but it isn't
+exhaustively tested across setups, has no CI test suite, and support is
+best-effort. Contributions and bug reports are welcome.
+
+### Known limitations
+
+- **Very long or structurally messy franchises resolve poorly.** Shows with
+  hundreds of episodes and idiosyncratic TVDB season structures — One Piece,
+  Pokémon, long-running Precure, etc. — are where the automatic matching is
+  least reliable. Their relation chains are huge, their TVDB↔MAL season
+  boundaries rarely line up, and MAL often splits them differently again. Expect
+  to fix these by hand in the web UI, or exclude them entirely (`plex.exclude`)
+  if you don't care about scoring them.
+- **Confidence is corroboration, not correctness.** A correct match can still be
+  labelled `low` when there was no relation chain to cross-check it against (see
+  [How matching works](#how-matching-works)). Use `low` as "worth a glance," not
+  "wrong."
+- **Franchises that branch via side stories / spin-offs** (e.g. the Index /
+  Railgun family) can resolve at low confidence, because the chain builder does
+  not follow those relation types. These usually need a manual override.
 
 ---
 
@@ -37,8 +65,8 @@ Two containers built from one image, sharing a `/data` volume:
 
 | Container | Role |
 |-----------|------|
-| `plex-mal-matcher` | The matcher. Runs on a schedule (or once), writes `output.json`, optionally applies ratings to Plex. |
-| `plex-mal-matcher-webui` | FastAPI + static UI on port `8484`. Reads `output.json`, writes `overrides.yaml`, triggers runs. |
+| `tsunagi` | The matcher. Runs on a schedule (or once), writes `output.json`, optionally applies ratings to Plex. |
+| `tsunagi-webui` | FastAPI + static UI on port `8484`. Reads `output.json`, writes `overrides.yaml`, triggers runs. |
 
 Everything the matcher needs — cache, config, mappings, output — lives in the
 `/data` volume as plain files and a SQLite database. Nothing is stored inside
@@ -90,8 +118,8 @@ The response schema is identical across these; only the base URL changes.
 ### 1. Get the source into your stack directory
 
 ```bash
-git clone https://your.gitea/you/plex-mal-matcher.git plex-mal-matcher
-cd plex-mal-matcher
+git clone https://your.gitea/you/Tsunagi.git tsunagi
+cd tsunagi
 ```
 
 The `docker-compose.yml` uses `build: .`, so the source lives in the stack
@@ -189,6 +217,7 @@ UI's "Run now" button wakes the loop early.
 | `path` | SQLite DB path. |
 | `score_ttl_days` | Re-fetch MAL scores older than this (default 7). |
 | `mapping_ttl_days` | Re-resolve TVDB→MAL mappings older than this (default 30). Set to `0` for one run to force a full re-resolution. |
+| `relations_ttl_days` | Re-fetch MAL relation graphs older than this (default 90, optional). Relation topology is near-static, so this is deliberately much longer than `score_ttl_days` — it spares the most Jikan-intensive step of a run. |
 
 ### `output`
 | Key | Description |
@@ -317,6 +346,22 @@ you never need to overwrite your working config.
 
 To force re-resolution of the whole library after a matching change, set
 `mapping_ttl_days: 0`, run once, then set it back to `30`.
+
+---
+
+## Development
+
+Run the test suite locally before committing:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+The tests cover season matching (cour splits, shared entries, OVA detection,
+movie handling, season-zero policy), config and override parsing, the Plex
+rating applier, SQLite persistence, and the web UI API — no live Plex, Jikan,
+or network access required.
 
 ---
 

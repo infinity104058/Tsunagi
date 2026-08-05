@@ -1,0 +1,14 @@
+# Loose runtime ranges — source of truth for what we depend on; the pinned
+# versions the image actually installs live in requirements.txt.
+# To upgrade: verify ranges here, install fresh, run pytest, then update the
+# == pins in requirements.txt to the versions that passed. For a full
+# transitive freeze, run inside the deploy base image (needs Linux/Docker):
+#   docker run --rm -v "$PWD:/src" python:3.11-slim \
+#     sh -c "pip install -q -r /src/requirements.in && pip freeze"
+plexapi>=4.15
+httpx>=0.27
+aiosqlite>=0.20
+lxml>=5.0
+PyYAML>=6.0
+fastapi>=0.110
+uvicorn[standard]>=0.29

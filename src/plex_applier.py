@@ -189,7 +189,7 @@ def apply_to_plex(
                 stats.skipped_unchanged += 1
                 continue
             log.info("%s '%s' S%d %s %.1f (was %s)",
-                     prefix, plan.title, num, cfg.field, rating,
+                     prefix, plan.title, num, cfg.season_field, rating,
                      f"{current:.1f}" if current is not None else "unset")
             if cfg.dry_run:
                 stats.seasons_updated += 1

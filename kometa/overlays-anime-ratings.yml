@@ -1,7 +1,7 @@
-# MAL rating overlays for the anime library — companion to plex-mal-matcher.
+# MAL rating overlays for the anime library — companion to Tsunagi.
 #
 # Data flow:
-#   plex-mal-matcher (apply stage) → Plex audienceRating on shows + seasons
+#   Tsunagi (apply stage) → Plex audienceRating on shows + seasons
 #     → these overlays render that value on the posters.
 #
 # Seasons carry their own per-season MAL score; the show poster carries the
@@ -23,7 +23,7 @@
 #
 # IMPORTANT: do NOT enable mass_audience_rating_update /
 # mass_season_rating_update operations on this library — they would
-# overwrite the per-season values plex-mal-matcher wrote, every Kometa run.
+# overwrite the per-season values Tsunagi wrote, every Kometa run.
 # Keep mass_user_rating_update OFF as well — season scores live in the
 # user rating field.
 
@@ -48,7 +48,7 @@ overlays:
   # ---- Season posters: that season's own MAL score --------------------------
   # NOTE: Kometa only supports <<user_rating>> as a season-level text
   # variable (audience_rating is movie/show/episode only), which is why
-  # plex-mal-matcher writes season scores to the user rating field
+  # Tsunagi writes season scores to the user rating field
   # (apply.season_field: user) while shows use audience.
   MAL Rating Season:
     builder_level: season

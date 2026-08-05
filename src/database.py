@@ -4,9 +4,11 @@ Raw SQL only — no ORM. All timestamps are timezone-aware UTC, serialised as
 ISO 8601 with a ``Z`` suffix.
 
 ``mal_entries`` caches series metadata only. Relations and search responses do
-not fit that schema — they are cached in ``jikan_cache`` instead, using the
-same ``score_ttl_days`` TTL. Without this, every run would re-fetch all
-relations during chain building, which is the most Jikan-intensive step.
+not fit that schema — they are cached in ``jikan_cache`` instead. Search
+results use ``score_ttl_days``; relation graphs use the much longer
+``relations_ttl_days``, because MAL prequel/sequel topology is essentially
+static while scores change weekly, and relation walking is the most
+Jikan-intensive step of a run.
 """
 from __future__ import annotations
 
@@ -97,15 +99,27 @@ def _is_fresh(ts: str, ttl_days: int) -> bool:
 class Database:
     """Owns the aiosqlite connection and all queries."""
 
-    def __init__(self, path: str, score_ttl_days: int, mapping_ttl_days: int) -> None:
+    def __init__(
+        self,
+        path: str,
+        score_ttl_days: int,
+        mapping_ttl_days: int,
+        relations_ttl_days: int = 90,
+    ) -> None:
         self._path = path
         self._score_ttl_days = score_ttl_days
         self._mapping_ttl_days = mapping_ttl_days
+        self._relations_ttl_days = relations_ttl_days
         self._db: aiosqlite.Connection | None = None
 
     async def connect(self) -> None:
         self._db = await aiosqlite.connect(self._path)
         self._db.row_factory = aiosqlite.Row
+        # WAL + busy_timeout: the matcher owns this file, but the webui's
+        # sidecar cache and any future second reader must not hit "database is
+        # locked" on the first overlap.
+        await self._db.execute("PRAGMA journal_mode=WAL")
+        await self._db.execute("PRAGMA busy_timeout=5000")
         await self._db.executescript(SCHEMA)
         await self._db.commit()
         log.info("Database ready at %s", self._path)
@@ -275,7 +289,8 @@ class Database:
     # ------------------------------------------------------------------ #
 
     async def get_cached_json(self, cache_key: str) -> dict | list | None:
-        """Return the parsed jikan_cache payload if within score_ttl_days."""
+        """Return the parsed jikan_cache payload if within its TTL — keyed by
+        prefix: "relations:*" uses relations_ttl_days, the rest score_ttl_days."""
         async with self.conn.execute(
             "SELECT payload, fetched_at FROM jikan_cache WHERE cache_key = ?",
             (cache_key,),
@@ -283,7 +298,12 @@ class Database:
             row = await cur.fetchone()
         if row is None:
             return None
-        if not _is_fresh(row["fetched_at"], self._score_ttl_days):
+        ttl_days = (
+            self._relations_ttl_days
+            if cache_key.startswith("relations:")
+            else self._score_ttl_days
+        )
+        if not _is_fresh(row["fetched_at"], ttl_days):
             return None
         try:
             return json.loads(row["payload"])

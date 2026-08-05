@@ -20,7 +20,7 @@ from src.resolver import Resolution
 log = logging.getLogger(__name__)
 
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass

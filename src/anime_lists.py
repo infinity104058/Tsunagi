@@ -97,9 +97,23 @@ class AnimeLists:
             return
 
         log.info("Downloading %s from %s", label, url)
-        async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
+        try:
+            async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
+                resp = await client.get(url)
+                resp.raise_for_status()
+        except (httpx.HTTPError, OSError) as exc:
+            # A transient upstream failure must not abort the whole run when a
+            # usable (merely stale) copy is already on disk. Only a missing
+            # file is fatal — there is nothing to parse without it.
+            path = Path(local_path)
+            if path.exists():
+                age_days = (time.time() - path.stat().st_mtime) / 86400.0
+                log.warning(
+                    "Download of %s failed (%s) — using local copy at %s "
+                    "(%.1f days old)", label, exc, local_path, age_days,
+                )
+                return
+            raise
 
         # Write atomically so a failed download never clobbers a good copy.
         tmp_path = local_path + ".tmp"
