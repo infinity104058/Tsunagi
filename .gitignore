@@ -25,6 +25,7 @@ venv/
 # AI session context — local working docs, not part of the release
 CLAUDE.md
 CODE_REVIEW.md
+ROADMAP.md
 
 # Editor / OS
 .vscode/
