@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- `output.json` now carries a `failed` array (and `failed_count`) for shows
+  that errored transiently during a run (exhausted Jikan retries, network
+  blips) — previously they vanished from the output and finding out why
+  required a log grep. The web UI shows them in a "failed this run" section,
+  separate from `unresolved` (which means "looked and found no answer").
 - `--force-resolve` CLI flag and a **↻ force re-resolve** button in the web
   UI: the next run re-resolves every mapping from scratch, ignoring
   `mapping_ttl_days` (overrides still win; the cache is rebuilt, not

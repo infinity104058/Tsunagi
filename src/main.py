@@ -122,6 +122,16 @@ async def _process_show(
         )
 
 
+def _failed_entry(show: PlexShow, exc: Exception) -> dict:
+    """Shape one transient whole-show failure for output.json's `failed`
+    block. Same negated-plex_id sentinel as unresolved entries."""
+    return {
+        "title": show.title,
+        "tvdb_id": show.tvdb_id if show.tvdb_id is not None else -show.plex_id,
+        "error": f"{type(exc).__name__}: {exc}",
+    }
+
+
 async def run_once(config: Config, force_resolve: bool = False) -> None:
     # Self-expiring run flag: the heartbeat keeps the mtime fresh so the webui
     # can distinguish a live run from a flag orphaned by SIGKILL/OOM.
@@ -164,28 +174,25 @@ async def run_once(config: Config, force_resolve: bool = False) -> None:
             aggregator = ScoreAggregator(jikan)
             semaphore = asyncio.Semaphore(SHOW_CONCURRENCY)
             run_unresolved: list[dict] = []
+            run_failed: list[dict] = []
 
             async def safe_process(show: PlexShow) -> exporter.ShowResult | None:
                 try:
                     return await _process_show(
                         show, resolver, aggregator, db, semaphore, run_unresolved
                     )
-                except Exception:
+                except Exception as exc:
+                    # Transient casualty (exhausted retries, network blip) —
+                    # not a mapping gap, so it goes to `failed`, not
+                    # `unresolved`, and shows up in the UI.
                     log.exception("Unhandled error while processing '%s' — skipping", show.title)
-                    run_unresolved.append(
-                        {
-                            "title": show.title,
-                            "tvdb_id": show.tvdb_id if show.tvdb_id is not None else -show.plex_id,
-                            "season_num": None,
-                            "reason": "Unhandled error during processing (see logs)",
-                        }
-                    )
+                    run_failed.append(_failed_entry(show, exc))
                     return None
 
             raw_results = await asyncio.gather(*(safe_process(show) for show in shows))
             results = [r for r in raw_results if r is not None]
 
-            exporter.write(results, run_unresolved, config.output.path)
+            exporter.write(results, run_unresolved, run_failed, config.output.path)
 
             # ---- Apply stage: write scores into Plex for Kometa overlays --------
             if config.apply.enabled:
@@ -215,7 +222,7 @@ async def run_once(config: Config, force_resolve: bool = False) -> None:
 
             log.info(
                 "Run complete: %d show(s) processed, %d in output, %d season(s) "
-                "resolved (high=%d medium=%d low=%d; %s), %d unresolved",
+                "resolved (high=%d medium=%d low=%d; %s), %d unresolved, %d failed",
                 len(shows),
                 len(results),
                 seasons_resolved,
@@ -224,6 +231,7 @@ async def run_once(config: Config, force_resolve: bool = False) -> None:
                 confidence_counts.get("low", 0),
                 ", ".join(f"{m}={c}" for m, c in sorted(method_counts.items())) or "none",
                 len(run_unresolved),
+                len(run_failed),
             )
         finally:
             await jikan.close()

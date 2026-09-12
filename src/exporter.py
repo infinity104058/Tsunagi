@@ -30,9 +30,17 @@ class ShowResult:
 def write(
     results: list[ShowResult],
     unresolved: list[dict],
+    failed: list[dict],
     path: str,
 ) -> None:
-    """Serialise results + unresolved entries to the output path."""
+    """Serialise results + unresolved + failed entries to the output path.
+
+    ``unresolved`` is "the matcher looked and found no answer";
+    ``failed`` is "the matcher never got to look" (a transient error such as
+    exhausted Jikan retries) — kept separate so transient casualties are
+    visible in the UI instead of requiring a log grep, and so they are not
+    mistaken for genuine mapping gaps.
+    """
     shows: dict[str, dict] = {}
     for result in results:
         shows[result.title] = {
@@ -64,12 +72,23 @@ def write(
         for u in unresolved
     ]
 
+    failed_block = [
+        {
+            "title": f.get("title"),
+            "tvdb_id": f["tvdb_id"] if (f.get("tvdb_id") or 0) > 0 else None,
+            "error": f.get("error"),
+        }
+        for f in failed
+    ]
+
     payload = {
         "generated_at": utc_now_iso(),
         "show_count": len(shows),
         "unresolved_count": len(unresolved_block),
+        "failed_count": len(failed_block),
         "shows": shows,
         "unresolved": unresolved_block,
+        "failed": failed_block,
     }
 
     out = Path(path)
@@ -79,5 +98,6 @@ def write(
         json.dump(payload, fh, ensure_ascii=False, indent=2)
     os.replace(tmp, out)
     log.info(
-        "Wrote %s: %d show(s), %d unresolved", path, len(shows), len(unresolved_block)
+        "Wrote %s: %d show(s), %d unresolved, %d failed",
+        path, len(shows), len(unresolved_block), len(failed_block),
     )

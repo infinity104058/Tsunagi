@@ -92,12 +92,14 @@
   #mhint{font-size:12px;color:var(--muted);margin-top:10px}
   label.chk{font-family:var(--mono);font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;cursor:pointer}
 
-  #unresolved-section,#exclude-section{margin-top:30px}
+  #unresolved-section,#failed-section,#exclude-section{margin-top:30px}
   h2.sect{font-family:var(--mono);font-size:13px;font-weight:600;margin-bottom:10px}
   #unresolved-section h2{color:var(--unres)}
+  #failed-section h2{color:var(--low)}
   #exclude-section h2{color:var(--muted)}
-  .unres-item,.exc-item{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:9px 14px;margin-bottom:8px;font-size:13px;display:flex;gap:12px;align-items:center}
+  .unres-item,.fail-item,.exc-item{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:9px 14px;margin-bottom:8px;font-size:13px;display:flex;gap:12px;align-items:center}
   .unres-item{border-left:3px solid var(--unres)}
+  .fail-item{border-left:3px solid var(--low)}
   .why{color:var(--muted);font-family:var(--mono);font-size:12px}
   #toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 18px;font-family:var(--mono);font-size:12px;display:none;z-index:60}
   #empty{display:none;color:var(--muted);text-align:center;padding:40px;font-family:var(--mono);font-size:13px}
@@ -133,6 +135,11 @@
   <div id="unresolved-section" style="display:none">
     <h2 class="sect">unresolved</h2>
     <div id="unresolved"></div>
+  </div>
+
+  <div id="failed-section" style="display:none">
+    <h2 class="sect">failed this run</h2>
+    <div id="failed"></div>
   </div>
 
   <div id="exclude-section" style="display:none">
@@ -204,7 +211,7 @@ function renderStatus(){
   else if(st.wake_pending){el.textContent="run queued";$("runbtn").disabled=true;$("forcebtn").disabled=false;}
   else{el.textContent="";$("runbtn").disabled=false;$("forcebtn").disabled=false;}
   var out=state.output;
-  $("genmeta").textContent=out?("generated "+(out.generated_at||"?")+" · "+out.show_count+" shows · "+(out.unresolved_count||0)+" unresolved"):"no output.json yet — trigger a run";
+  $("genmeta").textContent=out?("generated "+(out.generated_at||"?")+" · "+out.show_count+" shows · "+(out.unresolved_count||0)+" unresolved"+((out.failed_count||0)?" · "+out.failed_count+" failed":"")):"no output.json yet — trigger a run";
 }
 
 function render(){
@@ -285,6 +292,16 @@ function render(){
       '<div class="why">'+esc(u.reason||"")+"</div></div>"+
       (u.tvdb_id!=null?'<button class="editbtn" data-tvdb="'+esc(u.tvdb_id)+'" data-season="1" data-title="'+esc(u.title)+'" data-unres="1">✎ map</button>':"")+
       '<button class="xbtn danger" data-exclude="'+esc(u.title)+'">exclude</button>'+
+      "</div>";}).join("");
+
+  // failed (transient errors this run — not mapping gaps)
+  var fl=out.failed||[];
+  $("failed-section").style.display=fl.length?"block":"none";
+  $("failed").innerHTML=fl.map(function(f){
+    return '<div class="fail-item"><div style="flex:1"><strong>'+esc(f.title)+"</strong>"+
+      (f.tvdb_id!=null?' <span class="why">tvdb '+esc(f.tvdb_id)+"</span>":"")+
+      '<div class="why">'+esc(f.error||"")+"</div></div>"+
+      '<span class="why">transient — retried next run</span>'+
       "</div>";}).join("");
 
   // excludes
