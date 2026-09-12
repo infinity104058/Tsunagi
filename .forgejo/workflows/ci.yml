@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  test:
+    runs-on: docker
+    container:
+      image: python:3.11-slim
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir -r requirements-dev.txt
+          pip install --no-cache-dir ruff
+
+      - name: Lint
+        run: ruff check src tests
+
+      - name: Test
+        run: pytest -q

@@ -1,0 +1,75 @@
+Date : 2026-08-07 12:44:00
+Directory : c:\Projects\plex-mal-matcher
+Total : 37 files,  3814 codes, 603 comments, 835 blanks, all 5252 lines
+
+Languages
++------------------+------------+------------+------------+------------+------------+
+| language         | files      | code       | comment    | blank      | total      |
++------------------+------------+------------+------------+------------+------------+
+| Python           |         26 |      2,971 |        553 |        690 |      4,214 |
+| HTML             |          1 |        374 |          0 |         26 |        400 |
+| Markdown         |          2 |        345 |          0 |        107 |        452 |
+| YAML             |          2 |         60 |         37 |          6 |        103 |
+| JSON             |          1 |         30 |          0 |          1 |         31 |
+| pip requirements |          2 |         14 |         11 |          2 |         27 |
+| Ignore           |          1 |          9 |          2 |          1 |         12 |
+| Docker           |          1 |          7 |          0 |          1 |          8 |
+| Ini              |          1 |          4 |          0 |          1 |          5 |
++------------------+------------+------------+------------+------------+------------+
+
+Directories
++----------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                           | files      | code       | comment    | blank      | total      |
++----------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                              |         37 |      3,814 |        603 |        835 |      5,252 |
+| . (Files)                                                      |          8 |        407 |         14 |        114 |        535 |
+| .claude                                                        |          1 |         30 |          0 |          1 |         31 |
+| kometa                                                         |          1 |         32 |         36 |          4 |         72 |
+| src                                                            |         16 |      2,385 |        504 |        462 |      3,351 |
+| tests                                                          |         10 |        586 |         49 |        228 |        863 |
+| webui                                                          |          1 |        374 |          0 |         26 |        400 |
++----------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++----------------------------------------------------------------+------------------+------------+------------+------------+------------+
+| filename                                                       | language         | code       | comment    | blank      | total      |
++----------------------------------------------------------------+------------------+------------+------------+------------+------------+
+| c:\Projects\plex-mal-matcher\.claude\settings.local.json       | JSON             |         30 |          0 |          1 |         31 |
+| c:\Projects\plex-mal-matcher\.dockerignore                     | Ignore           |          9 |          2 |          1 |         12 |
+| c:\Projects\plex-mal-matcher\CHANGELOG.md                      | Markdown         |         67 |          0 |         14 |         81 |
+| c:\Projects\plex-mal-matcher\Dockerfile                        | Docker           |          7 |          0 |          1 |          8 |
+| c:\Projects\plex-mal-matcher\README.md                         | Markdown         |        278 |          0 |         93 |        371 |
+| c:\Projects\plex-mal-matcher\docker-compose.yml                | YAML             |         28 |          1 |          2 |         31 |
+| c:\Projects\plex-mal-matcher\kometa\overlays-anime-ratings.yml | YAML             |         32 |         36 |          4 |         72 |
+| c:\Projects\plex-mal-matcher\pytest.ini                        | Ini              |          4 |          0 |          1 |          5 |
+| c:\Projects\plex-mal-matcher\requirements.in                   | pip requirements |          7 |          7 |          1 |         15 |
+| c:\Projects\plex-mal-matcher\requirements.txt                  | pip requirements |          7 |          4 |          1 |         12 |
+| c:\Projects\plex-mal-matcher\src\__init__.py                   | Python           |          1 |          1 |          1 |          3 |
+| c:\Projects\plex-mal-matcher\src\anime_lists.py                | Python           |        177 |         26 |         36 |        239 |
+| c:\Projects\plex-mal-matcher\src\chain_builder.py              | Python           |        123 |         27 |         20 |        170 |
+| c:\Projects\plex-mal-matcher\src\config.py                     | Python           |        229 |         35 |         52 |        316 |
+| c:\Projects\plex-mal-matcher\src\database.py                   | Python           |        247 |         58 |         33 |        338 |
+| c:\Projects\plex-mal-matcher\src\edge_cases.py                 | Python           |        154 |         41 |         23 |        218 |
+| c:\Projects\plex-mal-matcher\src\exporter.py                   | Python           |         66 |          7 |         11 |         84 |
+| c:\Projects\plex-mal-matcher\src\jikan_client.py               | Python           |        147 |         47 |         32 |        226 |
+| c:\Projects\plex-mal-matcher\src\main.py                       | Python           |        217 |         39 |         35 |        291 |
+| c:\Projects\plex-mal-matcher\src\plex_applier.py               | Python           |        147 |         32 |         32 |        211 |
+| c:\Projects\plex-mal-matcher\src\plex_client.py                | Python           |        109 |         16 |         27 |        152 |
+| c:\Projects\plex-mal-matcher\src\resolver.py                   | Python           |        217 |         35 |         36 |        288 |
+| c:\Projects\plex-mal-matcher\src\runstate.py                   | Python           |         43 |         23 |         17 |         83 |
+| c:\Projects\plex-mal-matcher\src\score_aggregator.py           | Python           |         63 |         17 |         18 |         98 |
+| c:\Projects\plex-mal-matcher\src\season_matcher.py             | Python           |        255 |         74 |         48 |        377 |
+| c:\Projects\plex-mal-matcher\src\webui.py                      | Python           |        190 |         26 |         41 |        257 |
+| c:\Projects\plex-mal-matcher\tests\__init__.py                 | Python           |          0 |          0 |          1 |          1 |
+| c:\Projects\plex-mal-matcher\tests\conftest.py                 | Python           |         41 |          4 |         14 |         59 |
+| c:\Projects\plex-mal-matcher\tests\test_anime_lists.py         | Python           |         55 |          4 |         26 |         85 |
+| c:\Projects\plex-mal-matcher\tests\test_config.py              | Python           |         74 |          4 |         34 |        112 |
+| c:\Projects\plex-mal-matcher\tests\test_database.py            | Python           |         47 |          8 |         17 |         72 |
+| c:\Projects\plex-mal-matcher\tests\test_edge_cases.py          | Python           |         26 |          4 |         15 |         45 |
+| c:\Projects\plex-mal-matcher\tests\test_jikan_client.py        | Python           |         64 |          6 |         20 |         90 |
+| c:\Projects\plex-mal-matcher\tests\test_plex_applier.py        | Python           |         97 |          3 |         36 |        136 |
+| c:\Projects\plex-mal-matcher\tests\test_season_matcher.py      | Python           |         67 |         10 |         28 |        105 |
+| c:\Projects\plex-mal-matcher\tests\test_webui.py               | Python           |        115 |          6 |         37 |        158 |
+| c:\Projects\plex-mal-matcher\webui\index.html                  | HTML             |        374 |          0 |         26 |        400 |
+| Total                                                          |                  |      3,814 |        603 |        835 |      5,252 |
++----------------------------------------------------------------+------------------+------------+------------+------------+------------+
