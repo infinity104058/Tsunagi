@@ -12,16 +12,15 @@ jobs:
     container:
       image: python:3.11-slim
     steps:
-      - uses: actions/checkout@v4
-
+      - name: Checkout
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends git
+          git clone --depth 1 --branch "${GITHUB_REF_NAME}" \
+            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" .
       - name: Install dependencies
         run: |
-          pip install --no-cache-dir -r requirements.txt
-          pip install --no-cache-dir -r requirements-dev.txt
-          pip install --no-cache-dir ruff
-
+          pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt ruff
       - name: Lint
         run: ruff check src tests
-
       - name: Test
         run: pytest -q
