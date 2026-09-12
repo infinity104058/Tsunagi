@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+- `--force-resolve` CLI flag and a **↻ force re-resolve** button in the web
+  UI: the next run re-resolves every mapping from scratch, ignoring
+  `mapping_ttl_days` (overrides still win; the cache is rebuilt, not
+  deleted). Replaces the documented "set `mapping_ttl_days: 0`, run, set it
+  back" procedure, which silently disabled caching when step two was
+  forgotten.
+
 ### Fixed
 - Apply stage: items rated by the applier that had no `audienceRatingImage`
   rendered no rating at all in Plex UIs. The applier now backfills the image

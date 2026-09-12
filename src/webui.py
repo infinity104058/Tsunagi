@@ -31,8 +31,13 @@ from src.database import Database
 from src.jikan_client import JikanClient
 
 # runstate, not main: importing src.main would drag in plexapi and the whole
-# matcher graph just for two path helpers.
-from src.runstate import matcher_running, wake_file
+# matcher graph just for a few sentinel helpers.
+from src.runstate import (
+    WAKE_FORCE_RESOLVE,
+    matcher_running,
+    request_run,
+    wake_file,
+)
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-7s %(name)s: %(message)s")
@@ -244,14 +249,26 @@ async def delete_exclude(value: str):
     return {"ok": True}
 
 
+class RunBody(BaseModel):
+    # force=true → re-resolve every mapping, ignoring mapping_ttl_days
+    # (the webui counterpart of the --force-resolve CLI flag).
+    force: bool = False
+
+
 @app.post("/api/run")
-async def trigger_run():
+async def trigger_run(body: RunBody | None = None):
+    force = body.force if body is not None else False
     cfg = _config()
     if matcher_running(cfg):
         raise HTTPException(409, "matcher is already running")
     wf = wake_file(cfg)
     if wf.exists():
+        # Upgrade a pending plain run to a forced one; never downgrade.
+        if force and wf.read_text().strip() != WAKE_FORCE_RESOLVE:
+            request_run(cfg, force_resolve=True)
+            log.info("Pending run upgraded to force re-resolve")
+            return {"ok": True, "already_pending": True, "force": True}
         return {"ok": True, "already_pending": True}
-    wf.write_text("")
-    log.info("Run trigger written")
-    return {"ok": True}
+    request_run(cfg, force_resolve=force)
+    log.info("Run trigger written%s", " (force re-resolve)" if force else "")
+    return {"ok": True, "force": force}

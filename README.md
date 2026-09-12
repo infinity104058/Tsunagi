@@ -216,7 +216,7 @@ UI's "Run now" button wakes the loop early.
 |-----|-------------|
 | `path` | SQLite DB path. |
 | `score_ttl_days` | Re-fetch MAL scores older than this (default 7). |
-| `mapping_ttl_days` | Re-resolve TVDB→MAL mappings older than this (default 30). Set to `0` for one run to force a full re-resolution. |
+| `mapping_ttl_days` | Re-resolve TVDB→MAL mappings older than this (default 30). For a one-off full re-resolution use `--force-resolve` or the web UI button instead of editing this. |
 | `relations_ttl_days` | Re-fetch MAL relation graphs older than this (default 90, optional). Relation topology is near-static, so this is deliberately much longer than `score_ttl_days` — it spares the most Jikan-intensive step of a run. |
 
 ### `output`
@@ -345,8 +345,15 @@ When a release adds new config keys, they ship with defaults — diff your
 `data/config.yaml` against `config.yaml.example` to see what's newly available;
 you never need to overwrite your working config.
 
-To force re-resolution of the whole library after a matching change, set
-`mapping_ttl_days: 0`, run once, then set it back to `30`.
+To force re-resolution of the whole library after a matching change, click
+**↻ force re-resolve** in the web UI, or run the matcher with the flag:
+
+```bash
+docker compose run --rm tsunagi python -m src.main --force-resolve
+```
+
+Either way the next run ignores every cached mapping (overrides still win)
+and rebuilds the cache as it goes — no config edits needed.
 
 ---
 

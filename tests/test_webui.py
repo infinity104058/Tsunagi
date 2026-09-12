@@ -126,6 +126,25 @@ def test_run_trigger_and_guard(client):
     assert c.post("/api/run").status_code == 409     # refuse while running
 
 
+def test_run_trigger_force(client):
+    c, tmp = client
+    r = c.post("/api/run", json={"force": True})
+    assert r.status_code == 200 and r.json()["force"] is True
+    assert (tmp / ".run-now").read_text().strip() == "force-resolve"
+
+
+def test_run_trigger_force_upgrades_pending_plain_run(client):
+    c, tmp = client
+    c.post("/api/run")
+    assert (tmp / ".run-now").read_text().strip() == ""
+    r = c.post("/api/run", json={"force": True})
+    assert r.json().get("already_pending") is True and r.json().get("force") is True
+    assert (tmp / ".run-now").read_text().strip() == "force-resolve"
+    # A later plain request must not downgrade the pending forced run.
+    c.post("/api/run")
+    assert (tmp / ".run-now").read_text().strip() == "force-resolve"
+
+
 def test_stale_running_flag_ignored(client):
     """P0-2 regression: a flag orphaned by SIGKILL/OOM (mtime never refreshed
     again) must stop blocking the Run button after the staleness window."""

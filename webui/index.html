@@ -112,6 +112,7 @@
     </div>
     <span class="spacer"></span>
     <span id="runstate"></span>
+    <button id="forcebtn" title="Re-resolve every mapping on the next run, ignoring the cache TTL. Overrides still win. Use after a matcher upgrade or an anime-lists refresh.">↻ force re-resolve</button>
     <button id="runbtn" class="primary">Run now</button>
   </header>
 
@@ -199,9 +200,9 @@ function renderStatus(){
   if(state.version){var v=$("version");if(v)v.textContent="v"+state.version;}
   var st=state.status||{};
   var el=$("runstate");
-  if(st.matcher_running){el.textContent="⟳ matcher running…";$("runbtn").disabled=true;}
-  else if(st.wake_pending){el.textContent="run queued";$("runbtn").disabled=true;}
-  else{el.textContent="";$("runbtn").disabled=false;}
+  if(st.matcher_running){el.textContent="⟳ matcher running…";$("runbtn").disabled=true;$("forcebtn").disabled=true;}
+  else if(st.wake_pending){el.textContent="run queued";$("runbtn").disabled=true;$("forcebtn").disabled=false;}
+  else{el.textContent="";$("runbtn").disabled=false;$("forcebtn").disabled=false;}
   var out=state.output;
   $("genmeta").textContent=out?("generated "+(out.generated_at||"?")+" · "+out.show_count+" shows · "+(out.unresolved_count||0)+" unresolved"):"no output.json yet — trigger a run";
 }
@@ -379,6 +380,10 @@ $("mdelete").onclick=function(){
 // ---- top controls ----
 $("runbtn").onclick=function(){
   api("POST","/api/run").then(function(){toast("run triggered — matcher wakes within ~15s");renderStatusSoon();})
+    .catch(function(e){toast(e.message);});};
+$("forcebtn").onclick=function(){
+  if(!confirm("Force re-resolve? Every mapping is re-resolved from scratch on the next run (cached results ignored, overrides still win). This makes many API calls and can take a while on a large library."))return;
+  api("POST","/api/run",{force:true}).then(function(){toast("forced run triggered — matcher wakes within ~15s");renderStatusSoon();})
     .catch(function(e){toast(e.message);});};
 function renderStatusSoon(){setTimeout(load,2000);}
 document.querySelectorAll(".pill").forEach(function(p){

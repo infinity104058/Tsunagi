@@ -22,6 +22,7 @@ per run so one failed run does not kill the container.
 """
 from __future__ import annotations
 
+import argparse
 import asyncio
 import contextlib
 import logging
@@ -36,9 +37,10 @@ from src.jikan_client import JikanClient
 from src.plex_client import PlexShow, get_anime_shows
 from src.resolver import Resolver
 from src.runstate import (
+    WAKE_FORCE_RESOLVE,
     clear_running_flag,
+    consume_wake_file,
     heartbeat,
-    wake_file,
     write_running_flag,
 )
 from src.score_aggregator import ScoreAggregator
@@ -120,7 +122,7 @@ async def _process_show(
         )
 
 
-async def run_once(config: Config) -> None:
+async def run_once(config: Config, force_resolve: bool = False) -> None:
     # Self-expiring run flag: the heartbeat keeps the mtime fresh so the webui
     # can distinguish a live run from a flag orphaned by SIGKILL/OOM.
     flag = write_running_flag(config)
@@ -154,7 +156,11 @@ async def run_once(config: Config) -> None:
                 if before != len(shows):
                     log.info("Excluded %d show(s) via exclude lists", before - len(shows))
 
-            resolver = Resolver(config, db, jikan, anime_lists)
+            if force_resolve:
+                log.info("Force re-resolve: ignoring cached mappings this run "
+                         "(overrides still apply)")
+            resolver = Resolver(config, db, jikan, anime_lists,
+                                force_resolve=force_resolve)
             aggregator = ScoreAggregator(jikan)
             semaphore = asyncio.Semaphore(SHOW_CONCURRENCY)
             run_unresolved: list[dict] = []
@@ -231,8 +237,21 @@ async def run_once(config: Config) -> None:
         clear_running_flag(config)
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="python -m src.main")
+    parser.add_argument(
+        "--force-resolve",
+        action="store_true",
+        help="re-resolve every mapping on the next run, ignoring "
+             "mapping_ttl_days (overrides still win; the cache is rebuilt, "
+             "not deleted)",
+    )
+    return parser.parse_args()
+
+
 async def main() -> None:
     _setup_logging()
+    args = _parse_args()
     log.info("Tsunagi v%s starting", __version__)
     try:
         config = load_config()
@@ -245,11 +264,14 @@ async def main() -> None:
 
     if config.schedule_interval_hours == 0:
         log.info("schedule_interval_hours=0 — running once and exiting")
-        await run_once(config)
+        await run_once(config, force_resolve=args.force_resolve)
         return
 
     interval = config.schedule_interval_hours
     log.info("Scheduled mode: running every %d hour(s)", interval)
+    # The CLI flag forces the first run only; later runs force when the webui
+    # requests it through the wake file.
+    force = args.force_resolve
     while True:
         try:
             # Reload config each cycle so override/file edits apply without a
@@ -258,31 +280,31 @@ async def main() -> None:
             if config.schedule_interval_hours != interval:
                 interval = config.schedule_interval_hours
                 log.info("Schedule interval changed to %d hour(s)", interval)
-            await run_once(config)
+            await run_once(config, force_resolve=force)
         except Exception:
             # One failed run must not kill the container.
             log.exception("Run failed — will retry at the next interval")
         if interval == 0:
             log.info("schedule_interval_hours is now 0 — exiting after this run")
             return
-        await _sleep_until_next_run(config, interval * 3600)
+        force = await _sleep_until_next_run(config, interval * 3600)
 
 
-async def _sleep_until_next_run(config: Config, total_seconds: float) -> None:
-    """Sleep in short slices, waking early if the webui drops a .run-now file."""
+async def _sleep_until_next_run(config: Config, total_seconds: float) -> bool:
+    """Sleep in short slices, waking early if the webui drops a .run-now file.
+    Returns True when the wake request asked for a forced re-resolve."""
     slept = 0.0
     slice_s = 15.0
-    wf = wake_file(config)
     while slept < total_seconds:
-        if wf.exists():
-            try:
-                wf.unlink()
-            except OSError:
-                pass
-            log.info("Wake file detected — starting run immediately")
-            return
+        payload = consume_wake_file(config)
+        if payload is not None:
+            force = payload == WAKE_FORCE_RESOLVE
+            log.info("Wake file detected — starting run immediately%s",
+                     " (force re-resolve)" if force else "")
+            return force
         await asyncio.sleep(min(slice_s, total_seconds - slept))
         slept += slice_s
+    return False
 
 
 if __name__ == "__main__":

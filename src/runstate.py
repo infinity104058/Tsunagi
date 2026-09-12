@@ -37,6 +37,31 @@ def wake_file(config) -> Path:
     return _data_dir(config) / ".run-now"
 
 
+# Payload marking a wake request as "ignore cached mappings this run".
+WAKE_FORCE_RESOLVE = "force-resolve"
+
+
+def request_run(config, force_resolve: bool = False) -> None:
+    """Ask the matcher's schedule loop to start a run at the next poll."""
+    wake_file(config).write_text(WAKE_FORCE_RESOLVE if force_resolve else "")
+
+
+def consume_wake_file(config) -> str | None:
+    """Read and remove a pending wake request. Returns its payload ("" for a
+    plain run, WAKE_FORCE_RESOLVE for a forced one), or None when no request
+    is pending."""
+    wf = wake_file(config)
+    try:
+        payload = wf.read_text()
+    except OSError:
+        return None
+    try:
+        wf.unlink()
+    except OSError:
+        pass
+    return payload.strip()
+
+
 def running_flag(config) -> Path:
     return _data_dir(config) / ".matcher-running"
 

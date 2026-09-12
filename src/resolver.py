@@ -60,11 +60,15 @@ class Resolver:
         db: Database,
         jikan: JikanClient,
         anime_lists: AnimeLists,
+        force_resolve: bool = False,
     ) -> None:
         self._config = config
         self._db = db
         self._jikan = jikan
         self._anime_lists = anime_lists
+        # Skips only the cache read (step 2); overrides still win, and fresh
+        # resolutions still upsert, so the cache is rebuilt rather than lost.
+        self._force_resolve = force_resolve
         self._chain_builder = ChainBuilder(jikan)
         # (tvdb_id, season) → Override, for O(1) lookups.
         self._overrides: dict[tuple[int, int], Override] = {
@@ -91,7 +95,7 @@ class Resolver:
                 )
                 continue
 
-            if show.tvdb_id is not None:
+            if show.tvdb_id is not None and not self._force_resolve:
                 cached = await self._db.get_mapping(show.tvdb_id, season.season_num)
                 if cached is not None:
                     res = _resolution_from_cache(show, cached)
