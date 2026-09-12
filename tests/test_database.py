@@ -15,7 +15,7 @@ async def db(tmp_path):
 
 
 async def test_mapping_roundtrip(db):
-    await db.upsert_mapping(267440, 4, [40028, 51535], "weighted_avg", "low", 0, "anime-lists", "note")
+    await db.upsert_mapping(267440, 4, [40028, 51535], "weighted_avg", "low", 0, "anime-lists", "note", episode_count=28)
     row = await db.get_mapping(267440, 4)
     assert row is not None
     assert row["mal_ids"] == [40028, 51535]
@@ -31,7 +31,8 @@ async def test_mapping_ttl_zero_forces_stale(tmp_path):
     """mapping_ttl_days=0 means every mapping reads as stale (re-resolve)."""
     database = Database(str(tmp_path / "ttl.db"), score_ttl_days=7, mapping_ttl_days=0)
     await database.connect()
-    await database.upsert_mapping(1, 1, [100], "direct", "high", 0, "anime-lists")
+    await database.upsert_mapping(1, 1, [100], "direct", "high", 0, "anime-lists",
+                                  episode_count=12)
     # With TTL 0, a freshly written mapping is already considered expired.
     row = await database.get_mapping(1, 1)
     assert row is None
@@ -82,7 +83,8 @@ async def test_episode_count_not_passed_keeps_mapping(db):
 async def test_legacy_row_without_count_only_expires_by_ttl(db):
     """Rows written before the episode_count column (NULL) must not be
     invalidated by any count — no re-resolve stampede on upgrade."""
-    await db.upsert_mapping(267440, 1, [16498], "direct", "high", 0, "anime-lists")
+    await db.upsert_mapping(267440, 1, [16498], "direct", "high", 0, "anime-lists",
+                            episode_count=None)
     assert await db.get_mapping(267440, 1, episode_count=999) is not None
 
 

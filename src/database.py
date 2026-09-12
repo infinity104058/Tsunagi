@@ -208,7 +208,11 @@ class Database:
         episode_offset: int,
         source: str,
         notes: str = "",
-        episode_count: int | None = None,
+        *,
+        # Keyword-only and defaultless: every writer must state the Plex
+        # episode count at resolution time (None = genuinely unknown), or
+        # its rows would silently never count-invalidate.
+        episode_count: int | None,
     ) -> None:
         await self.conn.execute(
             """
