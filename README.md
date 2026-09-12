@@ -305,8 +305,10 @@ unresolved).
 When a flagged match is correct, click its **✓** button: the current
 resolution is pinned as an override (`note: confirmed correct`), so it wins
 over future re-resolution and drops out of *needs review* — the filter drains
-to only the genuinely questionable rows. Undo a confirmation like any other
-override: open the season's ✎ editor and delete it.
+to only the genuinely questionable rows. The ✎ override badge appears
+immediately; the confidence badge still shows the last run's value until the
+next run re-resolves the season through the override. Undo a confirmation
+like any other override: open the season's ✎ editor and delete it.
 
 ---
 
