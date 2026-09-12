@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.5.0
 
 ### Added
 - Confirm-correct button in the web UI: every match flagged by the *needs
