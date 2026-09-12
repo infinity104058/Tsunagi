@@ -216,7 +216,7 @@ UI's "Run now" button wakes the loop early.
 |-----|-------------|
 | `path` | SQLite DB path. |
 | `score_ttl_days` | Re-fetch MAL scores older than this (default 7). |
-| `mapping_ttl_days` | Re-resolve TVDB→MAL mappings older than this (default 30). For a one-off full re-resolution use `--force-resolve` or the web UI button instead of editing this. |
+| `mapping_ttl_days` | Re-resolve TVDB→MAL mappings older than this (default 30). A season whose Plex episode count changes (an airing split-cour gaining its second half) re-resolves immediately, TTL notwithstanding. For a one-off full re-resolution use `--force-resolve` or the web UI button instead of editing this. |
 | `relations_ttl_days` | Re-fetch MAL relation graphs older than this (default 90, optional). Relation topology is near-static, so this is deliberately much longer than `score_ttl_days` — it spares the most Jikan-intensive step of a run. |
 
 ### `output`

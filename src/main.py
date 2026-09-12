@@ -74,6 +74,7 @@ async def _process_show(
 
         seasons: dict[int, object] = {}
         unresolved_count = 0
+        season_counts = {s.season_num: s.episode_count for s in show.seasons}
 
         for resolution in result.resolutions:
             if resolution.method == "unresolved":
@@ -103,6 +104,9 @@ async def _process_show(
                     episode_offset=resolution.episode_offset,
                     source=resolution.source,
                     notes=resolution.notes,
+                    # Snapshot for cache invalidation: a future run whose
+                    # count differs re-resolves inside the TTL.
+                    episode_count=season_counts.get(resolution.season_num),
                 )
             if show.tvdb_id is not None:
                 # Clear any stale unresolved row from a previous run.

@@ -23,15 +23,16 @@ class StubJikan:
         return []
 
 
-async def _resolve(tmp_path, force_resolve):
+async def _resolve(tmp_path, force_resolve, cached_count=None, plex_count=64):
     cfg = load_config(write_config(tmp_path))
     db = Database(str(tmp_path / "m.db"), score_ttl_days=7, mapping_ttl_days=30)
     await db.connect()
     try:
-        await db.upsert_mapping(100, 1, [5114], "direct", "high", 0, "anime-lists")
+        await db.upsert_mapping(100, 1, [5114], "direct", "high", 0,
+                                "anime-lists", episode_count=cached_count)
         resolver = Resolver(cfg, db, StubJikan(), StubAnimeLists(),
                             force_resolve=force_resolve)
-        show = PlexShow(1, "FMA", 100, [PlexSeason(1, 64, [])])
+        show = PlexShow(1, "FMA", 100, [PlexSeason(1, plex_count, [])])
         result = await resolver.resolve_show(show)
         return result.resolutions[0]
     finally:
@@ -50,6 +51,24 @@ async def test_force_resolve_bypasses_fresh_cache(tmp_path):
     res = await _resolve(tmp_path, force_resolve=True)
     assert res.from_cache is False
     assert res.method == "unresolved"
+
+
+async def test_episode_count_change_re_resolves_inside_ttl(tmp_path):
+    """Split-cour staleness window: the mapping was resolved when the season
+    had 16 episodes; part 2 landed and Plex now has 28 — the resolver must
+    re-resolve instead of serving the cached single-entry mapping."""
+    res = await _resolve(tmp_path, force_resolve=False,
+                         cached_count=16, plex_count=28)
+    assert res.from_cache is False
+    assert res.method == "unresolved"   # stub sources find nothing — the
+    #                                     point is only that cache was skipped
+
+
+async def test_unchanged_episode_count_still_hits_cache(tmp_path):
+    res = await _resolve(tmp_path, force_resolve=False,
+                         cached_count=64, plex_count=64)
+    assert res.from_cache is True
+    assert res.mal_ids == [5114]
 
 
 async def test_force_resolve_does_not_bypass_overrides(tmp_path):

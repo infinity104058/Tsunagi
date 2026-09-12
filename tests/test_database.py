@@ -61,6 +61,67 @@ async def test_pragmas_set_on_connect(db):
     assert (await cur.fetchone())[0] == 5000
 
 
+# ------------------------------------------------- episode-count invalidation
+
+async def test_episode_count_change_invalidates_mapping(db):
+    """A split-cour season gaining part 2's episodes must miss the cache
+    inside its TTL, not serve the stale single-entry mapping for 30 days."""
+    await db.upsert_mapping(267440, 4, [40028], "direct", "high", 0,
+                            "anime-lists", episode_count=16)
+    assert await db.get_mapping(267440, 4, episode_count=16) is not None
+    assert await db.get_mapping(267440, 4, episode_count=28) is None
+
+
+async def test_episode_count_not_passed_keeps_mapping(db):
+    """Callers that don't know the current count (or don't care) still hit."""
+    await db.upsert_mapping(267440, 4, [40028], "direct", "high", 0,
+                            "anime-lists", episode_count=16)
+    assert await db.get_mapping(267440, 4) is not None
+
+
+async def test_legacy_row_without_count_only_expires_by_ttl(db):
+    """Rows written before the episode_count column (NULL) must not be
+    invalidated by any count — no re-resolve stampede on upgrade."""
+    await db.upsert_mapping(267440, 1, [16498], "direct", "high", 0, "anime-lists")
+    assert await db.get_mapping(267440, 1, episode_count=999) is not None
+
+
+async def test_migration_adds_episode_count_to_old_schema(tmp_path):
+    """connect() must upgrade a pre-column database in place."""
+    import sqlite3
+    path = str(tmp_path / "old.db")
+    conn = sqlite3.connect(path)
+    conn.executescript(
+        """
+        CREATE TABLE mappings (
+            tvdb_id INTEGER NOT NULL, season_num INTEGER NOT NULL,
+            mal_ids TEXT NOT NULL, method TEXT NOT NULL,
+            confidence TEXT NOT NULL, episode_offset INTEGER DEFAULT 0,
+            source TEXT NOT NULL, notes TEXT DEFAULT '',
+            resolved_at TEXT NOT NULL,
+            PRIMARY KEY (tvdb_id, season_num)
+        );
+        INSERT INTO mappings VALUES
+            (100, 1, '[5114]', 'direct', 'high', 0, 'anime-lists', '',
+             strftime('%Y-%m-%dT%H:%M:%SZ', 'now'));
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    database = Database(path, score_ttl_days=7, mapping_ttl_days=30)
+    await database.connect()
+    try:
+        row = await database.get_mapping(100, 1, episode_count=64)
+        assert row is not None and row["mal_ids"] == [5114]
+        # And new writes can store a count.
+        await database.upsert_mapping(100, 2, [1], "direct", "high", 0,
+                                      "anime-lists", episode_count=12)
+        assert await database.get_mapping(100, 2, episode_count=13) is None
+    finally:
+        await database.close()
+
+
 async def test_applied_ratings_upsert(db):
     await db.upsert_applied_rating(10, "show", -1, 8.5)
     await db.upsert_applied_rating(10, "season", 2, 9.0)

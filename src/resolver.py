@@ -96,7 +96,13 @@ class Resolver:
                 continue
 
             if show.tvdb_id is not None and not self._force_resolve:
-                cached = await self._db.get_mapping(show.tvdb_id, season.season_num)
+                # The current episode count rides along so a season that
+                # changed shape in Plex (split-cour part 2 landing) misses
+                # the cache and re-resolves immediately.
+                cached = await self._db.get_mapping(
+                    show.tvdb_id, season.season_num,
+                    episode_count=season.episode_count,
+                )
                 if cached is not None:
                     res = _resolution_from_cache(show, cached)
                     resolutions.append(res)

@@ -16,6 +16,13 @@
   forgotten.
 
 ### Fixed
+- Mappings are invalidated when a season's Plex episode count changes, not
+  just by TTL. Previously an airing split-cour that gained part 2's episodes
+  kept its single-entry mapping (and wrong score) for up to
+  `mapping_ttl_days`. The count is stored with each new mapping; rows from
+  older versions have no count and keep expiring by TTL alone (no
+  re-resolve stampede on upgrade — they pick up a count on their next
+  natural refresh).
 - Apply stage: items rated by the applier that had no `audienceRatingImage`
   rendered no rating at all in Plex UIs. The applier now backfills the image
   (new `apply.rating_image` key, default `imdb://image.rating`; existing

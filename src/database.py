@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS mappings (
     source        TEXT NOT NULL,      -- anime-lists | jikan-search | override
     notes         TEXT DEFAULT '',
     resolved_at   TEXT NOT NULL,      -- ISO 8601
+    episode_count INTEGER,            -- Plex episode count at resolve time;
+                                      -- NULL on rows from before this column
     PRIMARY KEY (tvdb_id, season_num)
 );
 
@@ -121,8 +123,20 @@ class Database:
         await self._db.execute("PRAGMA journal_mode=WAL")
         await self._db.execute("PRAGMA busy_timeout=5000")
         await self._db.executescript(SCHEMA)
+        await self._migrate()
         await self._db.commit()
         log.info("Database ready at %s", self._path)
+
+    async def _migrate(self) -> None:
+        """Additive migrations for databases created by older schemas —
+        CREATE TABLE IF NOT EXISTS never alters an existing table."""
+        async with self.conn.execute("PRAGMA table_info(mappings)") as cur:
+            cols = {row["name"] for row in await cur.fetchall()}
+        if "episode_count" not in cols:
+            await self.conn.execute(
+                "ALTER TABLE mappings ADD COLUMN episode_count INTEGER"
+            )
+            log.info("Migrated mappings table: added episode_count column")
 
     async def close(self) -> None:
         if self._db is not None:
@@ -139,8 +153,19 @@ class Database:
     # mappings
     # ------------------------------------------------------------------ #
 
-    async def get_mapping(self, tvdb_id: int, season_num: int) -> dict[str, Any] | None:
-        """Return the cached mapping if present and within mapping_ttl_days."""
+    async def get_mapping(
+        self,
+        tvdb_id: int,
+        season_num: int,
+        episode_count: int | None = None,
+    ) -> dict[str, Any] | None:
+        """Return the cached mapping if present, within mapping_ttl_days, and
+        still describing the same season shape: when the caller passes the
+        season's current Plex episode count and it differs from the count at
+        resolve time, the mapping is treated as stale even inside its TTL —
+        an airing split-cour gaining part 2's episodes must re-resolve now,
+        not up to 30 days later. Rows from before the episode_count column
+        (NULL) are only ever invalidated by the TTL."""
         async with self.conn.execute(
             "SELECT * FROM mappings WHERE tvdb_id = ? AND season_num = ?",
             (tvdb_id, season_num),
@@ -149,6 +174,17 @@ class Database:
         if row is None:
             return None
         if not _is_fresh(row["resolved_at"], self._mapping_ttl_days):
+            return None
+        stored_count = row["episode_count"]
+        if (
+            episode_count is not None
+            and stored_count is not None
+            and stored_count != episode_count
+        ):
+            log.info(
+                "Mapping tvdb %d S%d invalidated: episode count %d → %d",
+                tvdb_id, season_num, stored_count, episode_count,
+            )
             return None
         return {
             "tvdb_id": row["tvdb_id"],
@@ -172,13 +208,14 @@ class Database:
         episode_offset: int,
         source: str,
         notes: str = "",
+        episode_count: int | None = None,
     ) -> None:
         await self.conn.execute(
             """
             INSERT OR REPLACE INTO mappings
                 (tvdb_id, season_num, mal_ids, method, confidence,
-                 episode_offset, source, notes, resolved_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 episode_offset, source, notes, resolved_at, episode_count)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 tvdb_id,
@@ -190,6 +227,7 @@ class Database:
                 source,
                 notes,
                 utc_now_iso(),
+                episode_count,
             ),
         )
         await self.conn.commit()
