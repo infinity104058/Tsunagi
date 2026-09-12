@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Apply stage: items rated by the applier that had no `audienceRatingImage`
+  rendered no rating at all in Plex UIs. The applier now backfills the image
+  (new `apply.rating_image` key, default `imdb://image.rating`; existing
+  images are never overwritten; `""` disables) — including on items whose
+  rating was already correct, so previously-invisible ratings appear on the
+  next apply run.
+
 ## v0.4.0
 
 Renamed to **Tsunagi** (formerly `plex-mal-matcher`).

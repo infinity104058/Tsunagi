@@ -237,6 +237,7 @@ Writes MAL scores into Plex rating fields for Kometa overlays. See
 | `min_confidence` | `low` / `medium` / `high`. Seasons below this are not rated. |
 | `lock_fields` | Lock the field so Plex refreshes don't revert it. |
 | `dry_run` | Log what would change, write nothing. |
+| `rating_image` | Rating icon set on items that have none (default `imdb://image.rating`). Plex UIs hide an audience rating without one, so ratings written to agent-unrated items would otherwise be invisible. Existing images are never overwritten; `""` disables. |
 
 ### `overrides`
 | Key | Description |

@@ -96,6 +96,11 @@ class ApplyConfig:
     min_confidence: str = "low"      # low | medium | high
     lock_fields: bool = True
     dry_run: bool = False
+    # Plex UIs hide an audienceRating unless the item also carries an
+    # audienceRatingImage, so items rated by us that never had one (no agent
+    # rating) would show nothing. Set this image where it is absent; existing
+    # images are never overwritten. "" disables the fix-up entirely.
+    rating_image: str = "imdb://image.rating"
 
 
 @dataclass(frozen=True)
@@ -290,6 +295,15 @@ def load_config(path: str | None = None) -> Config:
     min_confidence = str(apply_raw.get("min_confidence", ApplyConfig.min_confidence))
     if min_confidence not in ("low", "medium", "high"):
         raise ConfigError("'apply.min_confidence' must be low, medium or high")
+    rating_image_raw = apply_raw.get("rating_image", ApplyConfig.rating_image)
+    rating_image = "" if rating_image_raw is None else str(rating_image_raw)
+    if rating_image and "://" not in rating_image:
+        # Plex expects an agent-style URI ("imdb://image.rating"); a bare word
+        # would be silently ignored by the server, hiding the misconfiguration.
+        raise ConfigError(
+            "'apply.rating_image' must be an agent-style URI like "
+            "'imdb://image.rating', or empty to disable"
+        )
     apply = ApplyConfig(
         enabled=bool(apply_raw.get("enabled", ApplyConfig.enabled)),
         field=apply_field,
@@ -298,6 +312,7 @@ def load_config(path: str | None = None) -> Config:
         min_confidence=min_confidence,
         lock_fields=bool(apply_raw.get("lock_fields", ApplyConfig.lock_fields)),
         dry_run=bool(apply_raw.get("dry_run", ApplyConfig.dry_run)),
+        rating_image=rating_image,
     )
 
     return Config(

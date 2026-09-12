@@ -56,6 +56,14 @@ apply:
                                  # not rated and don't count toward the average
   lock_fields: true              # lock the field so Plex refreshes keep the value
   dry_run: false                 # log what would change, write nothing
+  rating_image: "imdb://image.rating"
+                                 # Plex UIs hide an audience rating unless the
+                                 # item also has a rating image; this one is set
+                                 # wherever it's missing (existing images are
+                                 # kept). Other values Plex knows:
+                                 # themoviedb://image.rating,
+                                 # rottentomatoes://image.rating.ripe
+                                 # "" disables the fix-up
   # NOTE: keep Kometa's mass_*_rating_update operations OFF for this library,
   # or Kometa will overwrite these ratings on every run.
 

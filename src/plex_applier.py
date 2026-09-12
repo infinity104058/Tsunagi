@@ -115,6 +115,21 @@ def _current_rating(item, plex_field: str) -> float | None:
     return round(float(value), 1) if value is not None else None
 
 
+def _ensure_rating_image(item, uri: str, locked: bool, dry_run: bool) -> bool:
+    """Plex UIs hide an audienceRating when the item has no
+    audienceRatingImage, so a rating we write to an agent-unrated item would
+    be invisible. Set the configured image where it is absent — never
+    overwrite one an agent already chose. Returns True when a write happened
+    (or would have, in dry run)."""
+    if not uri:
+        return False
+    if getattr(item, "audienceRatingImage", None):
+        return False
+    if not dry_run:
+        item.editField("audienceRatingImage", uri, locked=locked)
+    return True
+
+
 def _write_rating(item, field: str, rating: float, locked: bool) -> None:
     if field == "user":
         # User ratings must go through Plex's /:/rate endpoint (what the star
@@ -152,6 +167,18 @@ def apply_to_plex(
 
         # ---- show level ------------------------------------------------
         if plan.show_rating is not None:
+            # Checked even when the rating itself is unchanged, so libraries
+            # rated before this fix get their missing images backfilled.
+            if cfg.field == "audience":
+                try:
+                    if _ensure_rating_image(show, cfg.rating_image,
+                                            cfg.lock_fields, cfg.dry_run):
+                        log.info("%s audienceRatingImage on '%s' (was unset)",
+                                 prefix, plan.title)
+                except Exception:
+                    log.exception("Failed setting audienceRatingImage for '%s'",
+                                  plan.title)
+                    stats.errors += 1
             current = _current_rating(show, show_attr)
             if current == plan.show_rating:
                 stats.skipped_unchanged += 1
@@ -184,6 +211,16 @@ def apply_to_plex(
                 log.warning("'%s' S%d not found in Plex — skipping", plan.title, num)
                 stats.errors += 1
                 continue
+            if cfg.season_field == "audience":
+                try:
+                    if _ensure_rating_image(season, cfg.rating_image,
+                                            cfg.lock_fields, cfg.dry_run):
+                        log.info("%s audienceRatingImage on '%s' S%d (was unset)",
+                                 prefix, plan.title, num)
+                except Exception:
+                    log.exception("Failed setting audienceRatingImage for '%s' S%d",
+                                  plan.title, num)
+                    stats.errors += 1
             current = _current_rating(season, season_attr)
             if current == rating:
                 stats.skipped_unchanged += 1

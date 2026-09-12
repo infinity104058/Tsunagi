@@ -69,18 +69,22 @@ def test_min_confidence_filter(shows, results):
 class FakeSeason:
     def __init__(self, idx, user=None, audience=None):
         self.index, self.userRating, self.audienceRating = idx, user, audience
+        self.audienceRatingImage = None
     def rate(self, r): self.userRating = r
     def editAudienceRating(self, r, locked=True): self.audienceRating = r
+    def editField(self, field, value, locked=None): setattr(self, field, value)
 
 
 class FakeShow:
     def __init__(self):
         self.audienceRating = None
         self.userRating = None
+        self.audienceRatingImage = None
         self._seasons = [FakeSeason(1), FakeSeason(2)]
     def seasons(self): return self._seasons
     def editAudienceRating(self, r, locked=True): self.audienceRating = r
     def rate(self, r): self.userRating = r
+    def editField(self, field, value, locked=None): setattr(self, field, value)
 
 
 @pytest.fixture
@@ -131,5 +135,45 @@ def test_dry_run_writes_nothing(monkeypatch):
         ApplyConfig(enabled=True, dry_run=True))
     assert written == []
     assert show.audienceRating is None
+    assert show.audienceRatingImage is None   # image fix-up respects dry_run too
     assert show._seasons[0].userRating is None
     assert stats.shows_updated == 1 and stats.seasons_updated == 2   # counted, not written
+
+
+# ---------------------------------------------------- audienceRatingImage fix
+
+def test_rating_image_set_when_absent(fake_server):
+    """A written audienceRating is invisible in Plex UIs without an
+    audienceRatingImage — the applier must backfill one."""
+    apply_to_plex([RatingPlan(10, "Multi", 8.5, {1: 8.0})], _pc(), ApplyConfig(enabled=True))
+    assert fake_server.audienceRatingImage == "imdb://image.rating"
+    # Seasons default to the user field, which needs no image.
+    assert fake_server._seasons[0].audienceRatingImage is None
+
+
+def test_rating_image_never_overwrites_existing(fake_server):
+    fake_server.audienceRatingImage = "themoviedb://image.rating"
+    apply_to_plex([RatingPlan(10, "Multi", 8.5, {})], _pc(), ApplyConfig(enabled=True))
+    assert fake_server.audienceRatingImage == "themoviedb://image.rating"
+
+
+def test_rating_image_backfilled_even_when_rating_unchanged(fake_server):
+    """Libraries rated before this fix have correct-but-invisible ratings;
+    the idempotent skip must not also skip the image."""
+    fake_server.audienceRating = 8.5
+    stats, written = apply_to_plex(
+        [RatingPlan(10, "Multi", 8.5, {})], _pc(), ApplyConfig(enabled=True))
+    assert written == [] and stats.skipped_unchanged == 1
+    assert fake_server.audienceRatingImage == "imdb://image.rating"
+
+
+def test_rating_image_empty_disables(fake_server):
+    apply_to_plex([RatingPlan(10, "Multi", 8.5, {})], _pc(),
+                  ApplyConfig(enabled=True, rating_image=""))
+    assert fake_server.audienceRatingImage is None
+
+
+def test_rating_image_on_seasons_when_audience(fake_server):
+    apply_to_plex([RatingPlan(10, "Multi", 8.5, {1: 8.0})], _pc(),
+                  ApplyConfig(enabled=True, season_field="audience"))
+    assert fake_server._seasons[0].audienceRatingImage == "imdb://image.rating"

@@ -66,6 +66,25 @@ def test_invalid_apply_field_rejected(tmp_path):
         load_config(write_config(tmp_path, match='apply: {field: bogus}'))
 
 
+def test_rating_image_default_and_custom(tmp_path):
+    cfg = load_config(write_config(tmp_path))
+    assert cfg.apply.rating_image == "imdb://image.rating"
+    cfg = load_config(write_config(
+        tmp_path, match='apply: {rating_image: "themoviedb://image.rating"}'))
+    assert cfg.apply.rating_image == "themoviedb://image.rating"
+
+
+def test_rating_image_empty_disables(tmp_path):
+    cfg = load_config(write_config(tmp_path, match='apply: {rating_image: ""}'))
+    assert cfg.apply.rating_image == ""
+
+
+def test_rating_image_bare_word_rejected(tmp_path):
+    """A non-URI value would be silently ignored by Plex — fail fast instead."""
+    with pytest.raises(ConfigError):
+        load_config(write_config(tmp_path, match='apply: {rating_image: "imdb"}'))
+
+
 # ------------------------------------------------------------ override parse
 
 def test_parse_override_direct():
