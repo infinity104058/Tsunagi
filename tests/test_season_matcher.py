@@ -3,9 +3,7 @@ from __future__ import annotations
 
 from src.plex_client import PlexSeason, PlexShow
 from src.season_matcher import MatchOptions, _is_ova_bundle, match_seasons
-
 from tests.conftest import chain_entry, make_episodes
-
 
 # ---------------------------------------------------------------- cour split
 

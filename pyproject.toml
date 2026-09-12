@@ -1,0 +1,15 @@
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "SIM", "ASYNC", "ISC"]
+ignore = [
+    "DTZ011",   # MAL air dates are naive calendar dates by design
+    "B008",     # MatchOptions is frozen; shared default is intentional
+    "SIM105",   # try/except/pass reads better than contextlib.suppress here
+    "SIM102",   # nested ifs express two distinct conditions more clearly
+    "ASYNC240", # single stat/small reads; only large writes go to a thread
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]   # long config fixtures and assertions

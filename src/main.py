@@ -28,8 +28,7 @@ import logging
 import sys
 from collections import Counter
 
-from src import __version__
-from src import exporter, plex_applier
+from src import __version__, exporter, plex_applier
 from src.anime_lists import AnimeLists
 from src.config import Config, ConfigError, load_config
 from src.database import Database

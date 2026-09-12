@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.config import ConfigError, _load_overrides, parse_override, load_config
-
+from src.config import ConfigError, _load_overrides, load_config, parse_override
 
 BASE_CONFIG = """
 plex: {{url: "http://x:32400", token: "t", library_name: "Anime Shows"{exclude}}}

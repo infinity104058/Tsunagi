@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
-from src.anime_lists import AnimeLists, AnimeListEntry
+from src.anime_lists import AnimeListEntry, AnimeLists
 from src.chain_builder import ChainBuilder
 from src.config import Config, Override
 from src.database import Database

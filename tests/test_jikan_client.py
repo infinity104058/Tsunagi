@@ -10,7 +10,6 @@ from src.config import JikanConfig
 from src.database import Database
 from src.jikan_client import JikanClient
 
-
 CFG = JikanConfig(
     base_url="http://j/v4",
     rate_limit_per_second=10,   # generous: the limiter must never sleep here,

@@ -11,7 +11,6 @@ import pytest
 from src.anime_lists import AnimeLists
 from src.config import AnimeListsConfig
 
-
 MINIMAL_XML = """<anime-list>
   <anime anidbid="1" tvdbid="267440" defaulttvdbseason="1" episodeoffset="0">
     <name>Attack on Titan</name>

@@ -29,6 +29,7 @@ from src import __version__
 from src.config import ConfigError, load_config, parse_override
 from src.database import Database
 from src.jikan_client import JikanClient
+
 # runstate, not main: importing src.main would drag in plexapi and the whole
 # matcher graph just for two path helpers.
 from src.runstate import matcher_running, wake_file
@@ -49,7 +50,7 @@ def _config():
     try:
         cfg = load_config()
     except ConfigError as exc:
-        raise HTTPException(500, f"Config error: {exc}")
+        raise HTTPException(500, f"Config error: {exc}") from exc
     _state["config"] = cfg
     return cfg
 
@@ -151,7 +152,7 @@ async def search(q: str, type: str = "tv"):
         return await jikan.search(q.strip(), type=type, limit=10)
     except Exception as exc:  # rate-limit exhaustion etc. — surface cleanly
         log.exception("Jikan search failed")
-        raise HTTPException(502, f"Jikan search failed: {exc}")
+        raise HTTPException(502, f"Jikan search failed: {exc}") from exc
 
 
 class OverrideBody(BaseModel):
@@ -183,7 +184,7 @@ async def put_override(body: OverrideBody):
     try:
         parse_override(entry, 0)  # validate exactly like the matcher will
     except ConfigError as exc:
-        raise HTTPException(422, str(exc))
+        raise HTTPException(422, str(exc)) from exc
 
     data = _read_overrides_raw(cfg.overrides_path)
     data["overrides"] = [

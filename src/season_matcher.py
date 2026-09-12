@@ -227,8 +227,10 @@ def _date_overlap_match(
             best,
             best_ratio,
             "low",
+            (
             f"Best date overlap {best_ratio:.2f} below "
-            f"{edge_cases.NO_MATCH_OVERLAP_THRESHOLD}.",
+            f"{edge_cases.NO_MATCH_OVERLAP_THRESHOLD}."
+            )
         )
 
     if best_ratio > 0.85 and _episode_ratio_confidence(season, best) == "high":

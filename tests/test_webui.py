@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 
 from src.runstate import RUNNING_FLAG_STALE_SECONDS
 
-
 CONFIG = """
 plex: {{url: "http://x:32400", token: "SECRET_TOKEN", library_name: "Anime Shows"}}
 anime_lists: {{url: "http://x", local_path: "{tmp}/al.xml", refresh_days: 9999}}

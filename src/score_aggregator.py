@@ -13,15 +13,12 @@ All scores are rounded to 2 decimal places.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 
 from src.jikan_client import JikanClient
 from src.resolver import Resolution
 
 log = logging.getLogger(__name__)
-
-
-from dataclasses import dataclass
-
 
 @dataclass
 class SeasonScore:

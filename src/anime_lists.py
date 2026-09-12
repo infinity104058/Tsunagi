@@ -6,6 +6,7 @@ for O(1) lookups.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -115,12 +116,18 @@ class AnimeLists:
                 return
             raise
 
-        # Write atomically so a failed download never clobbers a good copy.
+                # Write atomically so a failed download never clobbers a good copy.
         tmp_path = local_path + ".tmp"
         Path(tmp_path).parent.mkdir(parents=True, exist_ok=True)
-        with open(tmp_path, "wb") as fh:
-            fh.write(resp.content)
-        os.replace(tmp_path, local_path)
+
+        def _write() -> None:
+            with open(tmp_path, "wb") as fh:
+                fh.write(resp.content)
+            os.replace(tmp_path, local_path)
+
+        # ~30 MB write; keep it off the event loop (same reason plexapi calls
+        # go through to_thread).
+        await asyncio.to_thread(_write)
         log.info("%s saved to %s (%d bytes)", label, local_path, len(resp.content))
 
     def _load_mal_map(self) -> dict[int, int]:
