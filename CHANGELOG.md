@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- Confirm-correct button in the web UI: every match flagged by the *needs
+  review* filter gets a **✓** that pins the current resolution as an
+  override (`note: confirmed correct`) in one click. Overridden seasons no
+  longer match the *needs review* filter — human-decided is reviewed — so
+  the filter drains to genuinely questionable rows.
 - `output.json` now carries a `failed` array (and `failed_count`) for shows
   that errored transiently during a run (exhausted Jikan retries, network
   blips) — previously they vanished from the output and finding out why

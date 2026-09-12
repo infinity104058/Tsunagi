@@ -89,6 +89,22 @@ def test_override_without_tvdb_id_rejected(client):
     assert not (tmp / "overrides.yaml").exists()
 
 
+def test_confirm_correct_round_trip(client):
+    """The webui's confirm button pins the current resolution as an override,
+    passing the resolved method through verbatim — including shared_entry,
+    which the manual editor never sends."""
+    c, tmp = client
+    r = c.put("/api/override", json={"tvdb_id": 267440, "season": 2,
+                                     "mal_ids": [25777], "method": "shared_entry",
+                                     "note": "confirmed correct"})
+    assert r.status_code == 200
+    from src.config import _load_overrides
+    overrides, _ = _load_overrides(str(tmp / "overrides.yaml"))
+    ov = overrides[0]
+    assert ov.method == "shared_entry" and ov.mal_ids == [25777]
+    assert ov.note == "confirmed correct"
+
+
 def test_override_upsert_in_place(client):
     c, tmp = client
     c.put("/api/override", json={"tvdb_id": 555, "season": 1, "mal_ids": [1]})

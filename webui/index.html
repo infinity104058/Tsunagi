@@ -69,6 +69,7 @@
   .b-ovr{color:var(--accent);background:rgba(96,165,250,.12)}
   .method{font-family:var(--mono);font-size:11px;color:var(--muted)}
   .editbtn{font-size:11px;padding:3px 10px}
+  .confirmbtn{font-size:11px;padding:3px 10px;color:var(--high);margin-right:4px}
 
   /* assign panel */
   #modal-bg{display:none;position:fixed;inset:0;background:rgba(6,9,14,.7);z-index:40}
@@ -240,7 +241,9 @@ function render(){
     var nums=Object.keys(show.seasons).sort(function(a,b){return a-b;});
     var visible=nums.filter(function(n){
       var s=show.seasons[n];
-      if(filters.attention&&!needsAttention(s))return false;
+      // An override means a human already decided — confirmed or corrected —
+      // so it no longer needs review, whatever the last run's confidence was.
+      if(filters.attention&&(!needsAttention(s)||overrideFor(show.tvdb_id,n)))return false;
       if(filters.overridden&&!overrideFor(show.tvdb_id,n))return false;
       return true;});
     if(!visible.length)return;
@@ -266,7 +269,10 @@ function render(){
         '<td class="notes">'+esc(s.notes||"")+"</td>"+
         '<td>'+(show.tvdb_id==null
           ?'<button class="editbtn" disabled title="Overrides need a TVDB ID — this show has none, so a saved override could never apply">✎</button>'
-          :'<button class="editbtn" data-tvdb="'+esc(show.tvdb_id)+'" data-season="'+esc(n)+'" data-title="'+esc(title)+'">✎</button>')+'</td>'+
+          :(s.method!=="unresolved"&&!ovr&&needsAttention(s)
+            ?'<button class="confirmbtn" data-tvdb="'+esc(show.tvdb_id)+'" data-season="'+esc(n)+'" data-title="'+esc(title)+'" title="Confirm this match is correct — pins it as an override so it stops needing review">✓</button>'
+            :"")+
+           '<button class="editbtn" data-tvdb="'+esc(show.tvdb_id)+'" data-season="'+esc(n)+'" data-title="'+esc(title)+'">✎</button>')+'</td>'+
         "</tr>";}).join("");
     card.innerHTML='<div class="show-head">'+
       '<span class="dot" style="background:'+dot+'"></span>'+
@@ -329,6 +335,17 @@ function bindDynamic(){
         .then(function(){toast("removed");load();}).catch(function(e){toast("error: "+e.message);});};});
   document.querySelectorAll(".editbtn").forEach(function(b){
     b.onclick=function(){openModal(Number(b.getAttribute("data-tvdb")),Number(b.getAttribute("data-season")),b.getAttribute("data-title"),!!b.getAttribute("data-unres"));};});
+  document.querySelectorAll(".confirmbtn").forEach(function(b){
+    b.onclick=function(){
+      var title=b.getAttribute("data-title"),n=b.getAttribute("data-season");
+      var s=state.output&&state.output.shows[title]&&state.output.shows[title].seasons[n];
+      if(!s)return;
+      // Confirming = pinning the current resolution as an override: it wins
+      // over cache, survives re-resolution, and drops out of needs-review.
+      api("PUT","/api/override",{tvdb_id:Number(b.getAttribute("data-tvdb")),season:Number(n),
+        mal_ids:s.mal_ids||[],method:s.method,note:"confirmed correct"})
+        .then(function(){toast("confirmed — pinned as override");load();})
+        .catch(function(e){toast("error: "+e.message);});};});
 }
 
 // ---- assign modal ----

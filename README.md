@@ -54,8 +54,8 @@ best-effort. Contributions and bug reports are welcome.
    render them as poster badges.
 
 A companion **web UI** shows every match with a confidence rating, lets you
-search MAL and reassign any season by hand, manage an exclude list, and trigger
-a re-run.
+confirm correct low-confidence matches with one click, search MAL and reassign
+any season by hand, manage an exclude list, and trigger a re-run.
 
 ---
 
@@ -301,6 +301,12 @@ there simply wasn't extra evidence to promote it. Treat `low` as "worth a
 glance," not "wrong." The web UI's *needs review* filter surfaces exactly the
 matches worth confirming (low confidence, cour splits, shared entries,
 unresolved).
+
+When a flagged match is correct, click its **✓** button: the current
+resolution is pinned as an override (`note: confirmed correct`), so it wins
+over future re-resolution and drops out of *needs review* — the filter drains
+to only the genuinely questionable rows. Undo a confirmation like any other
+override: open the season's ✎ editor and delete it.
 
 ---
 
